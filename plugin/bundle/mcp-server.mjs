@@ -7773,7 +7773,8 @@ var SarifStore = class {
         return;
       }
       throw new Error(
-        `[sarif-store] Failed to load consolidated report at ${this.filePath}: ${error.message}`
+        `[sarif-store] Failed to load consolidated report at ${this.filePath}: ${error.message}`,
+        { cause: err }
       );
     }
   }

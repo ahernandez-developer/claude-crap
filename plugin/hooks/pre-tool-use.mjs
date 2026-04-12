@@ -111,7 +111,7 @@ function parseStdinJson(raw) {
   try {
     return JSON.parse(raw);
   } catch (err) {
-    throw new Error(`stdin is not valid JSON: ${/** @type {Error} */ (err).message}`);
+    throw new Error(`stdin is not valid JSON: ${/** @type {Error} */ (err).message}`, { cause: err });
   }
 }
 

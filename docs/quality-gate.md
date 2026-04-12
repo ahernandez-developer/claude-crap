@@ -149,6 +149,55 @@ Each failure renders as a framed block on stderr with a corrective
 message. Claude Code injects the box into the agent's context, which
 tells the agent exactly what to fix before retrying the Stop hook.
 
+## Strictness modes and gradual adoption
+
+The `strictness` value controls how the Stop gate and `score_project`
+react when a policy fails. The PreToolUse security gatekeeper is
+**always** strict regardless of this setting.
+
+| Mode       | Stop exit | Verdict sink | Agent experience |
+| :--------- | :-------: | :----------- | :--------------- |
+| `strict`   |    `2`    | stderr       | Full `BLOCKED` box — task cannot close. **Default.** |
+| `warn`     |    `0`    | stdout       | Full `WARNING` box — agent sees failures but task closes. |
+| `advisory` |    `0`    | stdout       | Single-line nudge only. |
+
+**Override per workspace** with `.claude-crap.json` at the root:
+
+```jsonc
+{
+  "$schema": "https://raw.githubusercontent.com/ahernandez-developer/claude-crap/main/schemas/crap-config.json",
+  "strictness": "warn"
+}
+```
+
+Or per session: `CLAUDE_CRAP_STRICTNESS=advisory claude`
+
+**Precedence** (most specific wins): env var > `.claude-crap.json` >
+hardcoded `strict`.
+
+### Adoption strategy
+
+Start in `advisory` so the agent annotates sessions with a quality
+reading. Bump to `warn` once the team is comfortable. When the
+project is clean enough, delete the file (or switch to `strict`) and
+let CI catch regressions.
+
+### Compliance note
+
+Claude Code's plugin spec recommends `userConfig` prompts for user
+configuration. `claude-crap` deliberately reads `.claude-crap.json`
+from the workspace root instead because:
+
+- An install-time prompt for an enum with a sensible default (`strict`)
+  is friction with no upside for 99% of users.
+- A workspace file can be committed to git alongside `.eslintrc.json`,
+  `.prettierrc.json`, etc. — team-wide policy in version control.
+- A JSON schema under `schemas/crap-config.json` provides IDE
+  autocompletion — `userConfig` has no equivalent surface.
+
+We comply with every other part of the plugin spec (manifest, hooks,
+MCP server, substitution tokens, directory layout).
+
 ## Related reading
 
 - [Hooks reference](./hooks.md) — exactly when each hook runs

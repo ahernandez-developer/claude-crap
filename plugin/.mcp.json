@@ -10,8 +10,7 @@
         "stdio"
       ],
       "env": {
-        "NODE_ENV": "production",
-        "CLAUDE_CRAP_PLUGIN_ROOT": "${CLAUDE_PLUGIN_ROOT}"
+        "NODE_ENV": "production"
       }
     }
   }
