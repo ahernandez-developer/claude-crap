@@ -7235,9 +7235,8 @@ function loadConfig() {
 }
 
 // src/dashboard/server.ts
-import { promises as fs2 } from "node:fs";
-import { createServer as createTcpServer } from "node:net";
-import { dirname as dirname2, resolve as resolve2 } from "node:path";
+import { promises as fs2, existsSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
+import { dirname as dirname2, join as join2, resolve as resolve2 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
@@ -7417,7 +7416,7 @@ async function startDashboard(options) {
     root: publicRoot,
     prefix: "/"
   });
-  fastify.get("/api/health", async () => ({ status: "ok", server: "claude-crap", version: "0.3.4" }));
+  fastify.get("/api/health", async () => ({ status: "ok", server: "claude-crap", version: "0.3.5" }));
   fastify.get("/api/score", async () => {
     const stats = await workspaceStatsProvider();
     const score = await buildScore(config, sarifStore, stats, urlOf(fastify, config));
@@ -7427,20 +7426,16 @@ async function startDashboard(options) {
   fastify.get("/", async (_request, reply) => {
     return reply.sendFile("index.html");
   });
-  const MAX_PORT_RETRIES = 4;
-  const boundPort = await findFreePort(config.dashboardPort, MAX_PORT_RETRIES, logger2);
-  await fastify.listen({ port: boundPort, host: "127.0.0.1" });
-  const url = `http://127.0.0.1:${boundPort}`;
-  if (boundPort !== config.dashboardPort) {
-    logger2.warn(
-      { url, configuredPort: config.dashboardPort, actualPort: boundPort },
-      "claude-crap dashboard bound to fallback port (configured port was in use)"
-    );
-  }
+  const pidFilePath = resolvePidFilePath(config);
+  await killStaleDashboard(pidFilePath, config.dashboardPort, logger2);
+  await fastify.listen({ port: config.dashboardPort, host: "127.0.0.1" });
+  const url = `http://127.0.0.1:${config.dashboardPort}`;
   logger2.info({ url, publicRoot }, "claude-crap dashboard listening");
+  writePidFile(pidFilePath, config.dashboardPort);
   return {
     url,
     async close() {
+      removePidFile(pidFilePath);
       await fastify.close();
     }
   };
@@ -7480,33 +7475,71 @@ function urlOf(fastify, config) {
   }
   return `http://127.0.0.1:${config.dashboardPort}`;
 }
-async function findFreePort(startPort, maxRetries, logger2) {
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    const candidatePort = startPort + attempt;
-    const isFree = await new Promise((resolvePromise) => {
-      const probe = createTcpServer();
-      probe.once("error", (err) => {
-        if (err.code === "EADDRINUSE") {
-          resolvePromise(false);
-        } else {
-          resolvePromise(false);
-        }
-      });
-      probe.listen({ port: candidatePort, host: "127.0.0.1" }, () => {
-        probe.close(() => resolvePromise(true));
-      });
-    });
-    if (isFree) return candidatePort;
-    if (attempt < maxRetries) {
-      logger2.info(
-        { port: candidatePort, nextPort: candidatePort + 1 },
-        "dashboard port in use, trying next"
-      );
-    }
+function resolvePidFilePath(config) {
+  return join2(config.pluginRoot, ".claude-crap", "dashboard.pid");
+}
+function writePidFile(path, port) {
+  const data = {
+    pid: process.pid,
+    port,
+    startedAt: (/* @__PURE__ */ new Date()).toISOString()
+  };
+  try {
+    writeFileSync(path, JSON.stringify(data, null, 2) + "\n");
+  } catch {
   }
-  throw new Error(
-    `[claude-crap] dashboard: all ports ${startPort}\u2013${startPort + maxRetries} are in use`
+}
+function removePidFile(path) {
+  try {
+    unlinkSync(path);
+  } catch {
+  }
+}
+function isPidAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+async function killStaleDashboard(pidFilePath, port, logger2) {
+  if (!existsSync(pidFilePath)) return;
+  let stale;
+  try {
+    stale = JSON.parse(readFileSync(pidFilePath, "utf8"));
+  } catch {
+    removePidFile(pidFilePath);
+    return;
+  }
+  if (!isPidAlive(stale.pid)) {
+    logger2.info({ stalePid: stale.pid }, "stale dashboard PID file found (process dead), removing");
+    removePidFile(pidFilePath);
+    return;
+  }
+  logger2.info(
+    { stalePid: stale.pid, port: stale.port, startedAt: stale.startedAt },
+    "killing stale dashboard process from previous session"
   );
+  try {
+    process.kill(stale.pid, "SIGTERM");
+  } catch {
+    removePidFile(pidFilePath);
+    return;
+  }
+  for (let i = 0; i < 30; i++) {
+    if (!isPidAlive(stale.pid)) break;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  if (isPidAlive(stale.pid)) {
+    try {
+      process.kill(stale.pid, "SIGKILL");
+    } catch {
+    }
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  removePidFile(pidFilePath);
+  await new Promise((r) => setTimeout(r, 300));
 }
 async function buildScore(config, sarifStore, workspace, dashboardUrl) {
   return computeProjectScore({
@@ -7551,7 +7584,7 @@ function computeCrap(input, threshold) {
 
 // src/metrics/workspace-walker.ts
 import { promises as fs3 } from "node:fs";
-import { join as join2 } from "node:path";
+import { join as join3 } from "node:path";
 var SKIP_DIRS = /* @__PURE__ */ new Set([
   "node_modules",
   ".git",
@@ -7606,7 +7639,7 @@ async function estimateWorkspaceLoc(workspaceRoot) {
     for (const entry of entries) {
       if (truncated) return;
       if (entry.name.startsWith(".") && entry.name !== ".claude-plugin") continue;
-      const full = join2(dir, entry.name);
+      const full = join3(dir, entry.name);
       if (entry.isDirectory()) {
         if (SKIP_DIRS.has(entry.name)) continue;
         await walk2(full);
@@ -7639,7 +7672,7 @@ async function estimateWorkspaceLoc(workspaceRoot) {
 
 // src/sarif/sarif-store.ts
 import { promises as fs4 } from "node:fs";
-import { dirname as dirname3, isAbsolute, join as join3, resolve as resolve3 } from "node:path";
+import { dirname as dirname3, isAbsolute, join as join4, resolve as resolve3 } from "node:path";
 
 // src/sarif/sarif-builder.ts
 function buildSarifDocument(tool, findings) {
@@ -7702,7 +7735,7 @@ var SarifStore = class {
   toolInvocations = 0;
   constructor(options) {
     const dir = isAbsolute(options.outputDir) ? options.outputDir : resolve3(options.workspaceRoot, options.outputDir);
-    this.filePath = join3(dir, options.fileName ?? "latest.sarif");
+    this.filePath = join4(dir, options.fileName ?? "latest.sarif");
   }
   /**
    * Absolute path to the consolidated SARIF file on disk.
@@ -7976,8 +8009,8 @@ function validateSarifDocument(doc) {
 }
 
 // src/crap-config.ts
-import { readFileSync } from "node:fs";
-import { join as join4 } from "node:path";
+import { readFileSync as readFileSync2 } from "node:fs";
+import { join as join5 } from "node:path";
 var STRICTNESS_VALUES = ["strict", "warn", "advisory"];
 var DEFAULT_STRICTNESS = "strict";
 var CrapConfigError = class extends Error {
@@ -8002,10 +8035,10 @@ function loadCrapConfig(options) {
   return { strictness: DEFAULT_STRICTNESS, strictnessSource: "default" };
 }
 function readFromFile(workspaceRoot) {
-  const filePath = join4(workspaceRoot, ".claude-crap.json");
+  const filePath = join5(workspaceRoot, ".claude-crap.json");
   let raw;
   try {
-    raw = readFileSync(filePath, "utf8");
+    raw = readFileSync2(filePath, "utf8");
   } catch (err) {
     const error = err;
     if (error.code === "ENOENT") return null;
@@ -8048,7 +8081,7 @@ function isStrictness(value) {
 
 // src/tools/test-harness.ts
 import { promises as fs5 } from "node:fs";
-import { basename, dirname as dirname4, extname, isAbsolute as isAbsolute2, join as join5, relative, resolve as resolve4, sep } from "node:path";
+import { basename, dirname as dirname4, extname, isAbsolute as isAbsolute2, join as join6, relative, resolve as resolve4, sep } from "node:path";
 var TEST_SUFFIX_PATTERN = /\.(test|spec)\./;
 function isTestFile(filePath) {
   const base = basename(filePath);
@@ -8066,21 +8099,21 @@ function candidatePaths(workspaceRoot, filePath) {
   const relFromRoot = relative(absWorkspace, absSource);
   const relDir = dirname4(relFromRoot);
   const candidates = /* @__PURE__ */ new Set();
-  candidates.add(join5(dir, `${base}.test${ext}`));
-  candidates.add(join5(dir, `${base}.spec${ext}`));
-  candidates.add(join5(dir, "__tests__", `${base}.test${ext}`));
-  candidates.add(join5(dir, "__tests__", `${base}.spec${ext}`));
+  candidates.add(join6(dir, `${base}.test${ext}`));
+  candidates.add(join6(dir, `${base}.spec${ext}`));
+  candidates.add(join6(dir, "__tests__", `${base}.test${ext}`));
+  candidates.add(join6(dir, "__tests__", `${base}.spec${ext}`));
   for (const testRoot of ["tests", "test", "__tests__"]) {
-    candidates.add(join5(absWorkspace, testRoot, relDir, `${base}.test${ext}`));
-    candidates.add(join5(absWorkspace, testRoot, relDir, `${base}.spec${ext}`));
-    candidates.add(join5(absWorkspace, testRoot, relDir, `${base}${ext}`));
+    candidates.add(join6(absWorkspace, testRoot, relDir, `${base}.test${ext}`));
+    candidates.add(join6(absWorkspace, testRoot, relDir, `${base}.spec${ext}`));
+    candidates.add(join6(absWorkspace, testRoot, relDir, `${base}${ext}`));
   }
   let current = dir;
   while (current.length >= absWorkspace.length) {
     for (const testRoot of ["tests", "test", "__tests__"]) {
-      candidates.add(join5(current, testRoot, `${base}.test${ext}`));
-      candidates.add(join5(current, testRoot, `${base}.spec${ext}`));
-      candidates.add(join5(current, testRoot, `${base}${ext}`));
+      candidates.add(join6(current, testRoot, `${base}.test${ext}`));
+      candidates.add(join6(current, testRoot, `${base}.spec${ext}`));
+      candidates.add(join6(current, testRoot, `${base}${ext}`));
     }
     if (current === absWorkspace) break;
     const parent = dirname4(current);
@@ -8088,9 +8121,9 @@ function candidatePaths(workspaceRoot, filePath) {
     current = parent;
   }
   if (ext === ".py") {
-    candidates.add(join5(dir, `test_${base}.py`));
-    candidates.add(join5(absWorkspace, "tests", `test_${base}.py`));
-    candidates.add(join5(absWorkspace, "tests", relDir, `test_${base}.py`));
+    candidates.add(join6(dir, `test_${base}.py`));
+    candidates.add(join6(absWorkspace, "tests", `test_${base}.py`));
+    candidates.add(join6(absWorkspace, "tests", relDir, `test_${base}.py`));
   }
   return Array.from(candidates);
 }
@@ -8124,12 +8157,12 @@ function resolveWithinWorkspace(workspaceRoot, filePath) {
 }
 
 // src/scanner/auto-scan.ts
-import { existsSync as existsSync4 } from "node:fs";
-import { join as join9 } from "node:path";
+import { existsSync as existsSync5 } from "node:fs";
+import { join as join10 } from "node:path";
 
 // src/scanner/detector.ts
-import { existsSync, readFileSync as readFileSync2 } from "node:fs";
-import { join as join6 } from "node:path";
+import { existsSync as existsSync2, readFileSync as readFileSync3 } from "node:fs";
+import { join as join7 } from "node:path";
 import { execFile } from "node:child_process";
 var SCANNER_SIGNALS = {
   eslint: {
@@ -8183,8 +8216,8 @@ var SCANNER_SIGNALS = {
 function probeConfigFiles(workspaceRoot, scanner) {
   const signals = SCANNER_SIGNALS[scanner];
   for (const file of signals.configFiles) {
-    const fullPath = join6(workspaceRoot, file);
-    if (existsSync(fullPath)) {
+    const fullPath = join7(workspaceRoot, file);
+    if (existsSync2(fullPath)) {
       return { found: true, path: fullPath };
     }
   }
@@ -8193,10 +8226,10 @@ function probeConfigFiles(workspaceRoot, scanner) {
 function probePackageJson(workspaceRoot, scanner) {
   const signals = SCANNER_SIGNALS[scanner];
   if (signals.packageJsonKeys.length === 0) return false;
-  const pkgPath = join6(workspaceRoot, "package.json");
-  if (!existsSync(pkgPath)) return false;
+  const pkgPath = join7(workspaceRoot, "package.json");
+  if (!existsSync2(pkgPath)) return false;
   try {
-    const raw = readFileSync2(pkgPath, "utf-8");
+    const raw = readFileSync3(pkgPath, "utf-8");
     const pkg = JSON.parse(raw);
     const deps = {
       ...typeof pkg.dependencies === "object" && pkg.dependencies !== null ? pkg.dependencies : {},
@@ -8256,8 +8289,8 @@ async function detectScanners(workspaceRoot) {
 
 // src/scanner/runner.ts
 import { execFile as execFile2 } from "node:child_process";
-import { readFileSync as readFileSync3, existsSync as existsSync2 } from "node:fs";
-import { join as join7 } from "node:path";
+import { readFileSync as readFileSync4, existsSync as existsSync3 } from "node:fs";
+import { join as join8 } from "node:path";
 function getScannerCommand(scanner, workspaceRoot) {
   switch (scanner) {
     case "eslint":
@@ -8287,7 +8320,7 @@ function getScannerCommand(scanner, workspaceRoot) {
         args: ["stryker", "run"],
         timeoutMs: 3e5,
         nonZeroIsNormal: false,
-        outputFile: join7(workspaceRoot, "reports", "mutation", "mutation.json")
+        outputFile: join8(workspaceRoot, "reports", "mutation", "mutation.json")
       };
   }
 }
@@ -8310,9 +8343,9 @@ function runScanner(scanner, workspaceRoot) {
         const durationMs = Date.now() - start;
         const isFatalError = cmd.nonZeroIsNormal && err && (!stdout?.trim() || stderr?.includes("Oops!") || stderr?.includes("couldn't find"));
         if (err && (!cmd.nonZeroIsNormal || isFatalError)) {
-          if (cmd.outputFile && existsSync2(cmd.outputFile)) {
+          if (cmd.outputFile && existsSync3(cmd.outputFile)) {
             try {
-              const fileOutput = readFileSync3(cmd.outputFile, "utf-8");
+              const fileOutput = readFileSync4(cmd.outputFile, "utf-8");
               resolve6({
                 scanner,
                 success: true,
@@ -8333,9 +8366,9 @@ function runScanner(scanner, workspaceRoot) {
           return;
         }
         if (cmd.outputFile) {
-          if (existsSync2(cmd.outputFile)) {
+          if (existsSync3(cmd.outputFile)) {
             try {
-              const fileOutput = readFileSync3(cmd.outputFile, "utf-8");
+              const fileOutput = readFileSync4(cmd.outputFile, "utf-8");
               resolve6({
                 scanner,
                 success: true,
@@ -8386,11 +8419,11 @@ function runScanner(scanner, workspaceRoot) {
 }
 
 // src/scanner/bootstrap.ts
-import { existsSync as existsSync3, writeFileSync, readdirSync } from "node:fs";
-import { join as join8 } from "node:path";
+import { existsSync as existsSync4, writeFileSync as writeFileSync2, readdirSync } from "node:fs";
+import { join as join9 } from "node:path";
 import { execFile as execFile3 } from "node:child_process";
 function detectProjectType(workspaceRoot) {
-  const has = (file) => existsSync3(join8(workspaceRoot, file));
+  const has = (file) => existsSync4(join9(workspaceRoot, file));
   if (has("package.json")) {
     if (has("tsconfig.json")) return "typescript";
     return "javascript";
@@ -8478,8 +8511,8 @@ function npmInstall(workspaceRoot, packages) {
   });
 }
 function writeEslintConfigFile(workspaceRoot, isTypeScript) {
-  const configPath = join8(workspaceRoot, "eslint.config.mjs");
-  if (existsSync3(configPath)) {
+  const configPath = join9(workspaceRoot, "eslint.config.mjs");
+  if (existsSync4(configPath)) {
     return {
       action: "create eslint.config.mjs",
       success: true,
@@ -8487,7 +8520,7 @@ function writeEslintConfigFile(workspaceRoot, isTypeScript) {
     };
   }
   try {
-    writeFileSync(configPath, generateEslintConfig(isTypeScript), "utf-8");
+    writeFileSync2(configPath, generateEslintConfig(isTypeScript), "utf-8");
     return {
       action: "create eslint.config.mjs",
       success: true,
@@ -8704,7 +8737,7 @@ async function autoScan(workspaceRoot, sarifStore, logger2) {
     ".eslintrc.json"
   ];
   const eslintDetected = available.some((d) => d.scanner === "eslint");
-  const hasEslintConfig = eslintConfigFiles.some((f) => existsSync4(join9(workspaceRoot, f)));
+  const hasEslintConfig = eslintConfigFiles.some((f) => existsSync5(join10(workspaceRoot, f)));
   if (eslintDetected && !hasEslintConfig) {
     logger2.info("auto-scan: ESLint detected but no config \u2014 running bootstrap");
     try {
