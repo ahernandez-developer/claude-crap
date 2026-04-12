@@ -152,13 +152,13 @@ async function checkDist(pluginRoot) {
     const stat = await fs.stat(npmEntry);
     npmAge = Math.round((Date.now() - stat.mtimeMs) / (1000 * 60 * 60));
     npmOk = true;
-  } catch {}
+  } catch { /* probe — absence is expected */ }
 
   try {
     const stat = await fs.stat(gitEntry);
     gitAge = Math.round((Date.now() - stat.mtimeMs) / (1000 * 60 * 60));
     gitOk = true;
-  } catch {}
+  } catch { /* probe — absence is expected */ }
 
   const details = [];
   if (npmOk) details.push(`dist/index.js (~${npmAge}h)`);
