@@ -1,8 +1,8 @@
 /**
- * Root public SDK for `@sr-herz/claude-crap`.
+ * Root public SDK for `claude-crap`.
  *
  * This is the module you get when you do
- * `import ... from "@sr-herz/claude-crap"`. It is intentionally
+ * `import ... from "claude-crap"`. It is intentionally
  * **side-effect-free**: importing this file does NOT start the MCP
  * server, does NOT open the dashboard, does NOT touch the filesystem.
  * Only the executable entrypoint in `dist/index.js` boots the
@@ -17,7 +17,7 @@
  *   - `./tools`   — test-harness resolver used by `require_test_harness`
  *
  * Prefer deep imports
- * (`import { computeCrap } from "@sr-herz/claude-crap/metrics"`) over
+ * (`import { computeCrap } from "claude-crap/metrics"`) over
  * pulling everything through the root — they give TypeScript more
  * precise type information and help tree-shakers drop unused modules.
  *

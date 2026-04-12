@@ -4,7 +4,7 @@
  * `claude-crap` CLI dispatcher.
  *
  * Installed as a `bin` entry in `package.json`, so both
- * `npx @sr-herz/claude-crap <cmd>` and a globally linked install
+ * `npx claude-crap <cmd>` and a globally linked install
  * resolve to this file. The binary itself is named `claude-crap`
  * (independent of the scoped npm package name), so after a global
  * install users can just type `claude-crap <cmd>`. The CLI is
@@ -54,10 +54,10 @@ Commands:
   help          Show this message.
 
 Examples:
-  npx @sr-herz/claude-crap install
-  npx @sr-herz/claude-crap doctor
-  npx @sr-herz/claude-crap status
-  npx @sr-herz/claude-crap bug-report --stdout
+  npx claude-crap install
+  npx claude-crap doctor
+  npx claude-crap status
+  npx claude-crap bug-report --stdout
 `.trim();
 
 /**

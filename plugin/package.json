@@ -1,5 +1,5 @@
 {
-  "name": "@sr-herz/claude-crap-plugin",
+  "name": "claude-crap-plugin",
   "version": "0.1.2",
   "private": true,
   "description": "Runtime dependencies for the claude-crap plugin bundle",

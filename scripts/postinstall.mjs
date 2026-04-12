@@ -3,7 +3,7 @@
  * npm `postinstall` hook for the claude-crap package.
  *
  * Runs automatically after every `npm install` (or
- * `npx @sr-herz/claude-crap install` of the package). Its job is to
+ * `npx claude-crap install` of the package). Its job is to
  * ensure both build surfaces exist:
  *
  *   - `dist/`                      — npm library distribution (tsc)
@@ -91,7 +91,7 @@ async function main() {
   // Already built? One-line banner and we're done.
   if (await distIsBuilt()) {
     process.stderr.write(
-      "claude-crap: ✓ prebuilt dist/ detected. Run `npx @sr-herz/claude-crap install` to finish setup.\n",
+      "claude-crap: ✓ prebuilt dist/ detected. Run `npx claude-crap install` to finish setup.\n",
     );
     return;
   }
@@ -103,7 +103,7 @@ async function main() {
   } catch {
     process.stderr.write(
       "claude-crap: ! dist/ is missing and TypeScript is not installed. " +
-        "Run `npm install` with devDependencies enabled and then `npx @sr-herz/claude-crap install`.\n",
+        "Run `npm install` with devDependencies enabled and then `npx claude-crap install`.\n",
     );
     return;
   }
@@ -117,7 +117,7 @@ async function main() {
     );
     return;
   }
-  process.stderr.write("claude-crap: ✓ build complete. Next: `npx @sr-herz/claude-crap install`.\n");
+  process.stderr.write("claude-crap: ✓ build complete. Next: `npx claude-crap install`.\n");
 }
 
 main().catch((err) => {

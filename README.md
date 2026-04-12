@@ -47,7 +47,7 @@ the workspace and prints the Claude Code slash command you need to
 run next:
 
 ```bash
-npx @sr-herz/claude-crap install
+npx claude-crap install
 ```
 
 `npx` downloads the package, the `postinstall` step compiles `dist/`
@@ -80,8 +80,8 @@ task close — no further setup required.
 
 > **Two install channels are live:**
 >
-> - **npm** — `npx @sr-herz/claude-crap install` (direct, works anywhere `npx` does)
-> - **Claude Code marketplace** — `/plugin marketplace add https://github.com/ahernandez-developer/claude-crap` followed by `/plugin install claude-crap@herz`. Claude Code resolves the marketplace entry's `source` to `@sr-herz/claude-crap@0.1.0` on the npm registry, so both routes unpack the **same tarball** and get the same SHA.
+> - **npm** — `npx claude-crap install` (direct, works anywhere `npx` does)
+> - **Claude Code marketplace** — `/plugin marketplace add https://github.com/ahernandez-developer/claude-crap` followed by `/plugin install claude-crap@herz`. Claude Code resolves the marketplace entry's `source` to `claude-crap@0.1.0` on the npm registry, so both routes unpack the **same tarball** and get the same SHA.
 
 ---
 
@@ -223,9 +223,9 @@ navigate there if you prefer browsing by chapter.
   Bandit, Stryker — mapping rules, effort tables, how to add a new
   adapter.
 - [SDK reference](./docs/sdk.md) — every symbol exported from
-  `@sr-herz/claude-crap`, `@sr-herz/claude-crap/metrics`,
-  `@sr-herz/claude-crap/sarif`, `@sr-herz/claude-crap/ast`,
-  `@sr-herz/claude-crap/tools`, `@sr-herz/claude-crap/adapters`.
+  `claude-crap`, `claude-crap/metrics`,
+  `claude-crap/sarif`, `claude-crap/ast`,
+  `claude-crap/tools`, `claude-crap/adapters`.
 
 ### Contributing & Releases
 
@@ -375,7 +375,7 @@ import {
   computeProjectScore,
   SarifStore,
   TreeSitterEngine,
-} from "@sr-herz/claude-crap";
+} from "claude-crap";
 ```
 
 Full details — including every schema, every error shape, and the
@@ -499,7 +499,7 @@ every piece of information a maintainer typically asks for when
 triaging an issue and writes it to a single Markdown bundle:
 
 ```bash
-npx @sr-herz/claude-crap bug-report
+npx claude-crap bug-report
 # writes ./claude-crap-bug-report-<timestamp>.md
 ```
 
