@@ -1,6 +1,6 @@
 {
   "name": "claude-crap-plugin",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "private": true,
   "description": "Runtime dependencies for the claude-crap plugin bundle",
   "type": "module",
@@ -14,5 +14,9 @@
   },
   "engines": {
     "node": ">=20.0.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.2.0"
   }
 }

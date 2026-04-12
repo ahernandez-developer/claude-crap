@@ -7236,6 +7236,7 @@ function loadConfig() {
 
 // src/dashboard/server.ts
 import { promises as fs2 } from "node:fs";
+import { createServer as createTcpServer } from "node:net";
 import { dirname as dirname2, resolve as resolve2 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 import Fastify from "fastify";
@@ -7426,8 +7427,16 @@ async function startDashboard(options) {
   fastify.get("/", async (_request, reply) => {
     return reply.sendFile("index.html");
   });
-  await fastify.listen({ port: config.dashboardPort, host: "127.0.0.1" });
-  const url = `http://127.0.0.1:${config.dashboardPort}`;
+  const MAX_PORT_RETRIES = 4;
+  const boundPort = await findFreePort(config.dashboardPort, MAX_PORT_RETRIES, logger2);
+  await fastify.listen({ port: boundPort, host: "127.0.0.1" });
+  const url = `http://127.0.0.1:${boundPort}`;
+  if (boundPort !== config.dashboardPort) {
+    logger2.warn(
+      { url, configuredPort: config.dashboardPort, actualPort: boundPort },
+      "claude-crap dashboard bound to fallback port (configured port was in use)"
+    );
+  }
   logger2.info({ url, publicRoot }, "claude-crap dashboard listening");
   return {
     url,
@@ -7470,6 +7479,34 @@ function urlOf(fastify, config) {
     return `http://${host}:${first.port}`;
   }
   return `http://127.0.0.1:${config.dashboardPort}`;
+}
+async function findFreePort(startPort, maxRetries, logger2) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const candidatePort = startPort + attempt;
+    const isFree = await new Promise((resolvePromise) => {
+      const probe = createTcpServer();
+      probe.once("error", (err) => {
+        if (err.code === "EADDRINUSE") {
+          resolvePromise(false);
+        } else {
+          resolvePromise(false);
+        }
+      });
+      probe.listen({ port: candidatePort, host: "127.0.0.1" }, () => {
+        probe.close(() => resolvePromise(true));
+      });
+    });
+    if (isFree) return candidatePort;
+    if (attempt < maxRetries) {
+      logger2.info(
+        { port: candidatePort, nextPort: candidatePort + 1 },
+        "dashboard port in use, trying next"
+      );
+    }
+  }
+  throw new Error(
+    `[claude-crap] dashboard: all ports ${startPort}\u2013${startPort + maxRetries} are in use`
+  );
 }
 async function buildScore(config, sarifStore, workspace, dashboardUrl) {
   return computeProjectScore({
