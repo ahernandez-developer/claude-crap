@@ -97,11 +97,21 @@ describe("detectScanners", () => {
         join(dir, "package.json"),
         JSON.stringify({ devDependencies: { eslint: "^9.0.0" } }),
       );
+      // Without node_modules/.bin/eslint, declared-but-not-installed
       const results = await detectScanners(dir);
       const eslint = results.find((r) => r.scanner === "eslint");
       assert.ok(eslint);
-      assert.equal(eslint.available, true);
-      assert.ok(eslint.reason.includes("package.json"));
+      assert.equal(eslint.available, false);
+      assert.ok(eslint.reason.includes("not installed"));
+
+      // With the binary present, it should be available
+      mkdirSync(join(dir, "node_modules", ".bin"), { recursive: true });
+      writeFileSync(join(dir, "node_modules", ".bin", "eslint"), "");
+      const results2 = await detectScanners(dir);
+      const eslint2 = results2.find((r) => r.scanner === "eslint");
+      assert.ok(eslint2);
+      assert.equal(eslint2.available, true);
+      assert.ok(eslint2.reason.includes("installed"));
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -116,11 +126,21 @@ describe("detectScanners", () => {
           devDependencies: { "@stryker-mutator/core": "^7.0.0" },
         }),
       );
+      // Without node_modules/.bin/stryker, declared-but-not-installed
       const results = await detectScanners(dir);
       const stryker = results.find((r) => r.scanner === "stryker");
       assert.ok(stryker);
-      assert.equal(stryker.available, true);
-      assert.ok(stryker.reason.includes("package.json"));
+      assert.equal(stryker.available, false);
+      assert.ok(stryker.reason.includes("not installed"));
+
+      // With the binary present, it should be available
+      mkdirSync(join(dir, "node_modules", ".bin"), { recursive: true });
+      writeFileSync(join(dir, "node_modules", ".bin", "stryker"), "");
+      const results2 = await detectScanners(dir);
+      const stryker2 = results2.find((r) => r.scanner === "stryker");
+      assert.ok(stryker2);
+      assert.equal(stryker2.available, true);
+      assert.ok(stryker2.reason.includes("installed"));
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
