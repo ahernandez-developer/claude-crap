@@ -94,13 +94,12 @@ export async function startDashboard(options: StartDashboardOptions): Promise<Da
   await fastify.register(fastifyStatic, {
     root: publicRoot,
     prefix: "/",
-    decorateReply: false,
   });
 
   // ------------------------------------------------------------------
   // /api/health — liveness probe
   // ------------------------------------------------------------------
-  fastify.get("/api/health", async () => ({ status: "ok", server: "claude-crap", version: "0.1.0" }));
+  fastify.get("/api/health", async () => ({ status: "ok", server: "claude-crap", version: "0.3.2" }));
 
   // ------------------------------------------------------------------
   // /api/score — live project score
@@ -117,8 +116,14 @@ export async function startDashboard(options: StartDashboardOptions): Promise<Da
   fastify.get("/api/sarif", async () => sarifStore.toSarifDocument());
 
   // ------------------------------------------------------------------
-  // / — static SPA fallback (Fastify-static handles index.html)
+  // / — explicit SPA fallback for index.html
   // ------------------------------------------------------------------
+  // @fastify/static sometimes doesn't serve index.html on GET / when
+  // API routes are registered on the same prefix. Explicit fallback
+  // ensures the dashboard always loads.
+  fastify.get("/", async (_request, reply) => {
+    return reply.sendFile("index.html");
+  });
 
   await fastify.listen({ port: config.dashboardPort, host: "127.0.0.1" });
   const url = `http://127.0.0.1:${config.dashboardPort}`;

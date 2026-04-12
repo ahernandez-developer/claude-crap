@@ -7414,16 +7414,18 @@ async function startDashboard(options) {
   });
   await fastify.register(fastifyStatic, {
     root: publicRoot,
-    prefix: "/",
-    decorateReply: false
+    prefix: "/"
   });
-  fastify.get("/api/health", async () => ({ status: "ok", server: "claude-crap", version: "0.1.0" }));
+  fastify.get("/api/health", async () => ({ status: "ok", server: "claude-crap", version: "0.3.2" }));
   fastify.get("/api/score", async () => {
     const stats = await workspaceStatsProvider();
     const score = await buildScore(config, sarifStore, stats, urlOf(fastify, config));
     return score;
   });
   fastify.get("/api/sarif", async () => sarifStore.toSarifDocument());
+  fastify.get("/", async (_request, reply) => {
+    return reply.sendFile("index.html");
+  });
   await fastify.listen({ port: config.dashboardPort, host: "127.0.0.1" });
   const url = `http://127.0.0.1:${config.dashboardPort}`;
   logger2.info({ url, publicRoot }, "claude-crap dashboard listening");
@@ -8083,6 +8085,10 @@ function resolveWithinWorkspace(workspaceRoot, filePath) {
   return candidate;
 }
 
+// src/scanner/auto-scan.ts
+import { existsSync as existsSync4 } from "node:fs";
+import { join as join9 } from "node:path";
+
 // src/scanner/detector.ts
 import { existsSync, readFileSync as readFileSync2 } from "node:fs";
 import { join as join6 } from "node:path";
@@ -8264,7 +8270,8 @@ function runScanner(scanner, workspaceRoot) {
       },
       (err, stdout, stderr) => {
         const durationMs = Date.now() - start;
-        if (err && !cmd.nonZeroIsNormal) {
+        const isFatalError = cmd.nonZeroIsNormal && err && (!stdout?.trim() || stderr?.includes("Oops!") || stderr?.includes("couldn't find"));
+        if (err && (!cmd.nonZeroIsNormal || isFatalError)) {
           if (cmd.outputFile && existsSync2(cmd.outputFile)) {
             try {
               const fileOutput = readFileSync3(cmd.outputFile, "utf-8");
@@ -8375,7 +8382,14 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    ignores: ["dist/", "node_modules/", "coverage/"],
+    ignores: [
+      "dist/",
+      "node_modules/",
+      "coverage/",
+      "**/bundle/",
+      "**/vendor/",
+      "**/*.min.js",
+    ],
   },
 );
 `;
@@ -8385,7 +8399,14 @@ export default tseslint.config(
 export default [
   js.configs.recommended,
   {
-    ignores: ["dist/", "node_modules/", "coverage/"],
+    ignores: [
+      "dist/",
+      "node_modules/",
+      "coverage/",
+      "**/bundle/",
+      "**/vendor/",
+      "**/*.min.js",
+    ],
   },
 ];
 `;
@@ -8475,7 +8496,8 @@ function getRecommendation(projectType) {
 async function bootstrapScanner(workspaceRoot, sarifStore, logger2) {
   const detections = await detectScanners(workspaceRoot);
   const available = detections.filter((d) => d.available);
-  if (available.length > 0) {
+  const eslintNeedsConfig = available.some((d) => d.scanner === "eslint") && !detections.some((d) => d.scanner === "eslint" && d.configPath);
+  if (available.length > 0 && !eslintNeedsConfig) {
     const existingScanners = available.map((d) => d.scanner);
     logger2.info(
       { existingScanners },
@@ -8500,13 +8522,23 @@ async function bootstrapScanner(workspaceRoot, sarifStore, logger2) {
   );
   if (recommendation.canAutoInstall) {
     const isTypeScript = projectType === "typescript";
-    const packages = isTypeScript ? ["eslint", "@eslint/js", "typescript-eslint"] : ["eslint", "@eslint/js"];
-    const installStep = await npmInstall(workspaceRoot, packages);
-    steps.push(installStep);
-    if (installStep.success) {
-      const configStep = writeEslintConfigFile(workspaceRoot, isTypeScript);
-      steps.push(configStep);
+    const eslintAlreadyInstalled = available.some((d) => d.scanner === "eslint");
+    if (!eslintAlreadyInstalled) {
+      const packages = isTypeScript ? ["eslint", "@eslint/js", "typescript-eslint"] : ["eslint", "@eslint/js"];
+      const installStep = await npmInstall(workspaceRoot, packages);
+      steps.push(installStep);
+      if (!installStep.success) {
+        return buildResult(projectType, steps, null);
+      }
+    } else {
+      steps.push({
+        action: "npm install eslint",
+        success: true,
+        detail: "eslint already in package.json \u2014 skipped install"
+      });
     }
+    const configStep = writeEslintConfigFile(workspaceRoot, isTypeScript);
+    steps.push(configStep);
   } else {
     steps.push({
       action: `suggest ${recommendation.scanner} install`,
@@ -8570,17 +8602,21 @@ async function bootstrapScanner(workspaceRoot, sarifStore, logger2) {
       );
     }
   }
+  return buildResult(projectType, steps, autoScanResult, recommendation);
+}
+function buildResult(projectType, steps, autoScanResult, recommendation) {
+  const success = steps.every((s) => s.success);
   const findings = autoScanResult?.totalFindings ?? 0;
-  const scannerInstalled = recommendation.canAutoInstall && installSucceeded;
+  const scanner = recommendation?.scanner ?? "unknown";
   let summary;
-  if (scannerInstalled && autoScanResult) {
-    summary = `Installed ${recommendation.scanner} for ${projectType} project. Auto-scan found ${findings} finding(s).`;
-  } else if (scannerInstalled) {
-    summary = `Installed ${recommendation.scanner} for ${projectType} project. Auto-scan did not run.`;
-  } else if (!recommendation.canAutoInstall) {
-    summary = `Detected ${projectType} project. Install ${recommendation.scanner} manually: ${recommendation.installInstructions}`;
+  if (success && autoScanResult) {
+    summary = `Configured ${scanner} for ${projectType} project. Scan found ${findings} finding(s).`;
+  } else if (success && recommendation && !recommendation.canAutoInstall) {
+    summary = `Detected ${projectType} project. Install ${scanner} manually: ${recommendation.installInstructions}`;
+  } else if (success) {
+    summary = `Configured ${scanner} for ${projectType} project.`;
   } else {
-    summary = `Failed to install ${recommendation.scanner}. Check the error details in the steps.`;
+    summary = `Failed to configure ${scanner}. Check the error details in the steps.`;
   }
   return {
     projectType,
@@ -8588,7 +8624,7 @@ async function bootstrapScanner(workspaceRoot, sarifStore, logger2) {
     existingScanners: [],
     steps,
     autoScanResult,
-    success: installSucceeded,
+    success,
     summary
   };
 }
@@ -8616,6 +8652,35 @@ async function autoScan(workspaceRoot, sarifStore, logger2) {
     },
     "auto-scan: detection complete"
   );
+  const eslintConfigFiles = [
+    "eslint.config.js",
+    "eslint.config.mjs",
+    "eslint.config.cjs",
+    "eslint.config.ts",
+    "eslint.config.mts",
+    "eslint.config.cts",
+    ".eslintrc.js",
+    ".eslintrc.cjs",
+    ".eslintrc.yaml",
+    ".eslintrc.yml",
+    ".eslintrc.json"
+  ];
+  const eslintDetected = available.some((d) => d.scanner === "eslint");
+  const hasEslintConfig = eslintConfigFiles.some((f) => existsSync4(join9(workspaceRoot, f)));
+  if (eslintDetected && !hasEslintConfig) {
+    logger2.info("auto-scan: ESLint detected but no config \u2014 running bootstrap");
+    try {
+      const bootstrapResult = await bootstrapScanner(workspaceRoot, sarifStore, logger2);
+      if (bootstrapResult.autoScanResult) {
+        return bootstrapResult.autoScanResult;
+      }
+    } catch (err) {
+      logger2.warn(
+        { err: err.message },
+        "auto-scan: bootstrap config creation failed"
+      );
+    }
+  }
   if (available.length === 0) {
     logger2.info("auto-scan: no scanners found, attempting bootstrap");
     try {

@@ -124,8 +124,14 @@ export function runScanner(
         const durationMs = Date.now() - start;
 
         // For scanners where non-zero exit means "findings exist",
-        // we still have valid output in stdout.
-        if (err && !cmd.nonZeroIsNormal) {
+        // we still have valid output in stdout. But if the scanner
+        // crashed (e.g. ESLint with no config file), treat it as a
+        // real failure even when nonZeroIsNormal is set.
+        const isFatalError = cmd.nonZeroIsNormal
+          && err
+          && (!stdout?.trim() || stderr?.includes("Oops!") || stderr?.includes("couldn't find"));
+
+        if (err && (!cmd.nonZeroIsNormal || isFatalError)) {
           // Stryker: check if the output file was written despite the error
           if (cmd.outputFile && existsSync(cmd.outputFile)) {
             try {
