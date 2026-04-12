@@ -104,7 +104,7 @@ export async function startDashboard(options: StartDashboardOptions): Promise<Da
   // ------------------------------------------------------------------
   // /api/health — liveness probe
   // ------------------------------------------------------------------
-  fastify.get("/api/health", async () => ({ status: "ok", server: "claude-crap", version: "0.3.6" }));
+  fastify.get("/api/health", async () => ({ status: "ok", server: "claude-crap", version: "0.3.7" }));
 
   // ------------------------------------------------------------------
   // /api/score — live project score
