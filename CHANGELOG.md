@@ -5,6 +5,100 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2026-04-11
+
+First feature release on top of the initial public drop. All the
+plumbing that `v0.1.0` put in place (hooks, MCP server, dashboard,
+SARIF store, scanner adapters, CLI) is unchanged — this release adds
+the user-facing surface that makes those engines reachable from
+Claude Code's slash-command palette.
+
+### Added
+
+- **Four user-invocable skills** under `skills/` at the plugin root.
+  Each skill is a `SKILL.md` file with YAML frontmatter declaring a
+  `name` and a "pushy" `description` (per the `skill-creator` skill's
+  guidance on combating undertriggering), and Markdown instructions
+  in the body that tell Claude how to invoke the underlying MCP tool
+  and render the result. The four skills:
+  - `/claude-sonar:score` — runs the `score_project` MCP tool and
+    displays the Markdown summary (Maintainability / Reliability /
+    Security / Overall A..E grades, plus the live dashboard URL and
+    the consolidated SARIF report path).
+  - `/claude-sonar:check-test` — takes a file-path argument, runs
+    `require_test_harness` against it, and reports whether a matching
+    characterization test exists; on `hasTest: false`, lists the top
+    three resolver candidate paths so the user knows exactly where
+    the new test should live per CLAUDE.md's Golden Rule.
+  - `/claude-sonar:analyze` — takes a file-path argument, auto-detects
+    the language from the extension (`typescript`, `javascript`,
+    `python`, `java`, `csharp`), runs `analyze_file_ast` against it,
+    and reports per-function cyclomatic complexity ranked descending
+    with refactoring candidates called out above the `cyclomaticMax`
+    ceiling.
+  - `/claude-sonar:adopt` — interactive onboarding walkthrough that
+    asks three questions about the team's test coverage, existing
+    findings, and enforcement appetite, and recommends one of
+    `strict` / `warn` / `advisory` for the workspace's
+    `.claude-sonar.json`. Produces a copy-pasteable JSON snippet and
+    a gradual-adoption roadmap.
+- **Frontmatter contract test** at `src/tests/skills-frontmatter.test.ts`
+  validates that every `skills/<name>/SKILL.md` has YAML frontmatter
+  with a `name` matching the directory, a `description` longer than
+  100 characters, and the `use this skill when/whenever ...` trigger
+  phrasing that the `skill-creator` guidance recommends. The test
+  fires on every `npm test` run so a future drive-by edit that
+  removes a field cannot slip through CI.
+
+### Changed
+
+- **`package.json#files` now ships `skills/`** in the npm tarball. The
+  `v0.1.0` tarball did NOT include `skills/` — this is the reason a
+  new version is mandatory rather than an in-place fix: Claude Code's
+  marketplace installs via `npm install @sr-herz/claude-sonar@<version>`,
+  not from the git repo, so the SKILL.md files only reach users after
+  a new tarball is published. Consumers who already ran
+  `/plugin install claude-sonar@herz` against `0.1.0` need to run
+  `/plugin marketplace update herz` to pick up `0.1.1`.
+- **`.claude-plugin/marketplace.json` plugin version bumped** on both
+  the top-level `version` field and the `source.version` pin, so the
+  `herz` marketplace now delivers `0.1.1` instead of `0.1.0`.
+
+### Fixed
+
+- **Stale README install instructions** that were written in the
+  future tense before the `v0.1.0` tag landed ("Once the plugin is
+  tagged on GitHub the Claude Code marketplace path becomes a fully
+  native second install route") are now replaced with the live
+  commands: `npx @sr-herz/claude-sonar install` for the direct npm
+  route, and `/plugin marketplace add https://github.com/ahernandez-developer/claude-sonar`
+  followed by `/plugin install claude-sonar@herz` for the Claude Code
+  marketplace route.
+
+### Merge and publish sequence for maintainers
+
+Because this release requires a new npm tarball to reach users via
+the marketplace, the merge and publish order matters:
+
+1. Review and merge this PR into `main` via "Squash and merge".
+2. Pull the merged `main` locally: `git checkout main && git pull`.
+3. Run `npm publish --otp=<6-digit-OTP>` from the repo root. The
+   `prepublishOnly` script gates the publish on
+   `clean + build + test + audit` — a broken test or a new HIGH
+   audit finding will block the tag before any version lands.
+4. Verify on the registry: `npm view @sr-herz/claude-sonar version`
+   should print `0.1.1`.
+5. Tag the release in git: `git tag -a v0.1.1 -m "Release v0.1.1"`
+   followed by `git push origin v0.1.1`.
+6. Optionally publish a GitHub release via
+   `gh release create v0.1.1 --notes-file CHANGELOG.md`.
+
+Between step 1 (merge) and step 3 (publish), the `herz` marketplace
+briefly references `@sr-herz/claude-sonar@0.1.1` before that version
+exists on the registry. New marketplace installs during that window
+will fail with a clean npm 404 — no persistent state damage, but
+running `npm publish` immediately after merging minimizes the gap.
+
 ## [0.1.0] - 2026-04-11
 
 Initial public release of `claude-sonar` — a deterministic Quality Assurance
@@ -156,4 +250,5 @@ characterization and attack tests per the Golden Rule in `CLAUDE.md`.
   extensions are not rejected. (`src/sarif/sarif-validator.ts`,
   `src/tests/sarif-validator.test.ts`.)
 
+[0.1.1]: https://github.com/ahernandez-developer/claude-sonar/releases/tag/v0.1.1
 [0.1.0]: https://github.com/ahernandez-developer/claude-sonar/releases/tag/v0.1.0
