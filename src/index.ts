@@ -93,6 +93,18 @@ async function main(): Promise<void> {
     "claude-crap MCP server starting",
   );
 
+  // Load user-defined exclusions from .claude-crap.json (non-fatal).
+  let userExclusions: ReadonlyArray<string> = [];
+  try {
+    const crapConfig = loadCrapConfig({ workspaceRoot: config.pluginRoot });
+    userExclusions = crapConfig.exclude;
+    if (userExclusions.length > 0) {
+      logger.info({ exclude: userExclusions }, "user exclusions loaded from .claude-crap.json");
+    }
+  } catch {
+    // Non-fatal — use empty exclusions.
+  }
+
   // Long-lived engines. Created once at boot and reused for every call.
   const astEngine = new TreeSitterEngine();
   const sarifStore = new SarifStore({
@@ -112,9 +124,10 @@ async function main(): Promise<void> {
     dashboard = await startDashboard({
       config,
       sarifStore,
-      workspaceStatsProvider: () => estimateWorkspaceLoc(config.pluginRoot),
+      workspaceStatsProvider: () => estimateWorkspaceLoc(config.pluginRoot, { exclude: userExclusions }),
       logger,
       astEngine,
+      exclude: userExclusions,
     });
   } catch (err) {
     logger.warn(
@@ -333,7 +346,7 @@ async function main(): Promise<void> {
         const typed = (args ?? {}) as { format?: "markdown" | "json" | "both" };
         const format = typed.format ?? "both";
         try {
-          const workspace = await estimateWorkspaceLoc(config.pluginRoot);
+          const workspace = await estimateWorkspaceLoc(config.pluginRoot, { exclude: userExclusions });
           const score: ProjectScore = computeProjectScore({
             workspaceRoot: config.pluginRoot,
             minutesPerLoc: config.minutesPerLoc,
@@ -585,6 +598,7 @@ async function main(): Promise<void> {
           const result = await autoScan(config.pluginRoot, sarifStore, logger, {
             engine: astEngine,
             cyclomaticMax: config.cyclomaticMax,
+            exclude: userExclusions,
           });
           const markdown = renderAutoScanMarkdown(result);
           return {
@@ -676,6 +690,7 @@ async function main(): Promise<void> {
   autoScan(config.pluginRoot, sarifStore, logger, {
     engine: astEngine,
     cyclomaticMax: config.cyclomaticMax,
+    exclude: userExclusions,
   })
     .then((result) => {
       const scanners = result.results

@@ -33,6 +33,7 @@ import fastifyStatic from "@fastify/static";
 import type { Logger } from "pino";
 
 import type { CrapConfig } from "../config.js";
+import { createExclusionFilter } from "../shared/exclusions.js";
 import {
   computeProjectScore,
   type ProjectScore,
@@ -64,6 +65,8 @@ export interface StartDashboardOptions {
   readonly logger: Logger;
   /** Tree-sitter engine for the /api/complexity endpoint. */
   readonly astEngine?: TreeSitterEngine;
+  /** User-defined exclusion patterns from .claude-crap.json. */
+  readonly exclude?: ReadonlyArray<string>;
 }
 
 /**
@@ -127,7 +130,7 @@ export async function startDashboard(options: StartDashboardOptions): Promise<Da
     if (!options.astEngine) {
       return { threshold: config.cyclomaticMax, totalFunctions: 0, violationCount: 0, topFunctions: [] };
     }
-    return buildComplexityReport(config, options.astEngine, logger);
+    return buildComplexityReport(config, options.astEngine, logger, options.exclude);
   });
 
   // ------------------------------------------------------------------
@@ -394,12 +397,7 @@ interface ComplexityReport {
   topFunctions: ComplexityEntry[];
 }
 
-/** Directories to skip (mirrors workspace-walker.ts). */
-const SKIP_DIRS: ReadonlySet<string> = new Set([
-  "node_modules", ".git", "dist", "build", "out", "target",
-  ".venv", "venv", "__pycache__", ".cache", ".next", ".nuxt",
-  ".claude-crap", ".codesight",
-]);
+// Directory exclusions are now centralized in src/shared/exclusions.ts.
 
 /**
  * Walk the workspace and collect per-function complexity metrics,
@@ -410,8 +408,10 @@ async function buildComplexityReport(
   config: CrapConfig,
   engine: TreeSitterEngine,
   logger: Logger,
+  exclude?: ReadonlyArray<string>,
 ): Promise<ComplexityReport> {
   const threshold = config.cyclomaticMax;
+  const filter = createExclusionFilter(exclude);
   const allFunctions: ComplexityEntry[] = [];
   let totalFunctions = 0;
 
@@ -423,10 +423,9 @@ async function buildComplexityReport(
       return;
     }
     for (const entry of entries) {
-      if (entry.name.startsWith(".") && entry.name !== ".claude-plugin") continue;
       const full = join(dir, entry.name);
       if (entry.isDirectory()) {
-        if (SKIP_DIRS.has(entry.name)) continue;
+        if (filter.shouldSkipDir(entry.name)) continue;
         await walk(full);
         continue;
       }

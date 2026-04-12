@@ -81,6 +81,8 @@ export interface CrapConfig {
   readonly strictness: Strictness;
   /** Where the strictness value actually came from. Useful for diagnostics. */
   readonly strictnessSource: "env" | "file" | "default";
+  /** User-defined exclusion patterns (directories with trailing `/`, or file globs). */
+  readonly exclude: ReadonlyArray<string>;
 }
 
 /**
@@ -107,6 +109,11 @@ export interface LoadCrapConfigOptions {
  * @throws        {@link CrapConfigError} on any invalid input.
  */
 export function loadCrapConfig(options: LoadCrapConfigOptions): CrapConfig {
+  // Always read the file to extract `exclude`, even when strictness
+  // comes from the environment variable.
+  const fileResult = readFromFile(options.workspaceRoot);
+  const exclude = fileResult?.exclude ?? [];
+
   const envRaw = process.env["CLAUDE_CRAP_STRICTNESS"];
   if (typeof envRaw === "string" && envRaw.trim() !== "") {
     const normalized = envRaw.trim().toLowerCase();
@@ -116,13 +123,14 @@ export function loadCrapConfig(options: LoadCrapConfigOptions): CrapConfig {
           `Expected one of: ${STRICTNESS_VALUES.join(", ")}.`,
       );
     }
-    return { strictness: normalized, strictnessSource: "env" };
+    return { strictness: normalized, strictnessSource: "env", exclude };
   }
 
-  const fromFile = readFromFile(options.workspaceRoot);
-  if (fromFile) return { strictness: fromFile, strictnessSource: "file" };
+  if (fileResult?.strictness) {
+    return { strictness: fileResult.strictness, strictnessSource: "file", exclude };
+  }
 
-  return { strictness: DEFAULT_STRICTNESS, strictnessSource: "default" };
+  return { strictness: DEFAULT_STRICTNESS, strictnessSource: "default", exclude };
 }
 
 /**
@@ -138,7 +146,12 @@ export function loadCrapConfig(options: LoadCrapConfigOptions): CrapConfig {
  * @returns             The validated strictness, or `null` when no
  *                      file is present.
  */
-function readFromFile(workspaceRoot: string): Strictness | null {
+interface FileResult {
+  strictness: Strictness | null;
+  exclude: string[];
+}
+
+function readFromFile(workspaceRoot: string): FileResult | null {
   const filePath = join(workspaceRoot, ".claude-crap.json");
   let raw: string;
   try {
@@ -166,22 +179,46 @@ function readFromFile(workspaceRoot: string): Strictness | null {
     );
   }
   const doc = parsed as Record<string, unknown>;
-  if (!("strictness" in doc)) return null;
 
-  const value = doc["strictness"];
-  if (typeof value !== "string") {
-    throw new CrapConfigError(
-      `[crap-config] ${filePath}: 'strictness' must be a string, got ${typeof value}`,
-    );
+  // Parse strictness
+  let strictness: Strictness | null = null;
+  if ("strictness" in doc) {
+    const value = doc["strictness"];
+    if (typeof value !== "string") {
+      throw new CrapConfigError(
+        `[crap-config] ${filePath}: 'strictness' must be a string, got ${typeof value}`,
+      );
+    }
+    const normalized = value.trim().toLowerCase();
+    if (!isStrictness(normalized)) {
+      throw new CrapConfigError(
+        `[crap-config] ${filePath}: 'strictness' is "${value}"; ` +
+          `expected one of ${STRICTNESS_VALUES.join(", ")}.`,
+      );
+    }
+    strictness = normalized;
   }
-  const normalized = value.trim().toLowerCase();
-  if (!isStrictness(normalized)) {
-    throw new CrapConfigError(
-      `[crap-config] ${filePath}: 'strictness' is "${value}"; ` +
-        `expected one of ${STRICTNESS_VALUES.join(", ")}.`,
-    );
+
+  // Parse exclude
+  let exclude: string[] = [];
+  if ("exclude" in doc) {
+    const raw = doc["exclude"];
+    if (!Array.isArray(raw)) {
+      throw new CrapConfigError(
+        `[crap-config] ${filePath}: 'exclude' must be an array of strings`,
+      );
+    }
+    for (const item of raw) {
+      if (typeof item !== "string") {
+        throw new CrapConfigError(
+          `[crap-config] ${filePath}: every entry in 'exclude' must be a string, got ${typeof item}`,
+        );
+      }
+    }
+    exclude = raw as string[];
   }
-  return normalized;
+
+  return { strictness, exclude };
 }
 
 /**

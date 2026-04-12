@@ -97,7 +97,7 @@ export async function autoScan(
   workspaceRoot: string,
   sarifStore: SarifStore,
   logger: Logger,
-  options?: { engine?: TreeSitterEngine; cyclomaticMax?: number },
+  options?: { engine?: TreeSitterEngine; cyclomaticMax?: number; exclude?: ReadonlyArray<string> },
 ): Promise<AutoScanResult> {
   const start = Date.now();
 
@@ -259,7 +259,7 @@ export async function autoScan(
         workspaceRoot,
         options.engine,
         sarifStore,
-        { cyclomaticMax: options.cyclomaticMax ?? 15 },
+        { cyclomaticMax: options.cyclomaticMax ?? 15, ...(options.exclude ? { exclude: options.exclude } : {}) },
         logger,
       );
       totalFindings += complexityScan.violations;

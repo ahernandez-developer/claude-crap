@@ -15,7 +15,9 @@
  */
 
 import { promises as fs } from "node:fs";
-import { join } from "node:path";
+import { join, relative } from "node:path";
+
+import { createExclusionFilter, type ExclusionFilter } from "../shared/exclusions.js";
 
 /**
  * Result returned by {@link estimateWorkspaceLoc}.
@@ -29,26 +31,9 @@ export interface WorkspaceWalkResult {
   readonly truncated: boolean;
 }
 
-/**
- * Directories that should never contribute to the LOC count. Dependency
- * caches, build artifacts, VCS metadata, claude-crap's own state.
- */
-const SKIP_DIRS: ReadonlySet<string> = new Set([
-  "node_modules",
-  ".git",
-  "dist",
-  "build",
-  "out",
-  "target",
-  ".venv",
-  "venv",
-  "__pycache__",
-  ".cache",
-  ".next",
-  ".nuxt",
-  ".claude-crap",
-  ".codesight",
-]);
+// Directory exclusions are now centralized in src/shared/exclusions.ts.
+// The createExclusionFilter() factory is called once per walk with
+// optional user-defined patterns from .claude-crap.json.
 
 /**
  * Extensions the walker treats as "code". Anything else is ignored,
@@ -91,9 +76,14 @@ export const MAX_FILES_WALKED = 20_000;
  * (which is tiny and contains the manifest).
  *
  * @param workspaceRoot Absolute path to the workspace root.
+ * @param options       Optional settings including user-defined exclusion patterns.
  * @returns             A {@link WorkspaceWalkResult} snapshot.
  */
-export async function estimateWorkspaceLoc(workspaceRoot: string): Promise<WorkspaceWalkResult> {
+export async function estimateWorkspaceLoc(
+  workspaceRoot: string,
+  options?: { exclude?: ReadonlyArray<string> },
+): Promise<WorkspaceWalkResult> {
+  const filter = createExclusionFilter(options?.exclude);
   let physicalLoc = 0;
   let fileCount = 0;
   let truncated = false;
@@ -108,11 +98,9 @@ export async function estimateWorkspaceLoc(workspaceRoot: string): Promise<Works
     }
     for (const entry of entries) {
       if (truncated) return;
-      // Skip hidden files except the plugin manifest dir.
-      if (entry.name.startsWith(".") && entry.name !== ".claude-plugin") continue;
       const full = join(dir, entry.name);
       if (entry.isDirectory()) {
-        if (SKIP_DIRS.has(entry.name)) continue;
+        if (filter.shouldSkipDir(entry.name)) continue;
         await walk(full);
         continue;
       }
@@ -122,6 +110,8 @@ export async function estimateWorkspaceLoc(workspaceRoot: string): Promise<Works
       if (dot < 0) continue;
       const ext = lower.substring(dot);
       if (!CODE_EXTENSIONS.has(ext)) continue;
+      const relPath = relative(workspaceRoot, full);
+      if (filter.shouldSkipFile(relPath, entry.name)) continue;
       fileCount += 1;
       if (fileCount > MAX_FILES_WALKED) {
         truncated = true;
@@ -130,8 +120,6 @@ export async function estimateWorkspaceLoc(workspaceRoot: string): Promise<Works
       try {
         const content = await fs.readFile(full, "utf8");
         if (content.length > 0) {
-          // Subtract 1 for trailing newline, matching what most editors
-          // report as the file's line count.
           const lines = content.split(/\r?\n/).length;
           physicalLoc += content.endsWith("\n") ? lines - 1 : lines;
         }

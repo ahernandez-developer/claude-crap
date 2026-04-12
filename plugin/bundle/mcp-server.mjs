@@ -3585,49 +3585,49 @@ var require_fast_uri = __commonJS({
       schemelessOptions.skipEscape = true;
       return serialize(resolved, schemelessOptions);
     }
-    function resolveComponent(base, relative3, options, skipNormalization) {
+    function resolveComponent(base, relative4, options, skipNormalization) {
       const target = {};
       if (!skipNormalization) {
         base = parse(serialize(base, options), options);
-        relative3 = parse(serialize(relative3, options), options);
+        relative4 = parse(serialize(relative4, options), options);
       }
       options = options || {};
-      if (!options.tolerant && relative3.scheme) {
-        target.scheme = relative3.scheme;
-        target.userinfo = relative3.userinfo;
-        target.host = relative3.host;
-        target.port = relative3.port;
-        target.path = removeDotSegments(relative3.path || "");
-        target.query = relative3.query;
+      if (!options.tolerant && relative4.scheme) {
+        target.scheme = relative4.scheme;
+        target.userinfo = relative4.userinfo;
+        target.host = relative4.host;
+        target.port = relative4.port;
+        target.path = removeDotSegments(relative4.path || "");
+        target.query = relative4.query;
       } else {
-        if (relative3.userinfo !== void 0 || relative3.host !== void 0 || relative3.port !== void 0) {
-          target.userinfo = relative3.userinfo;
-          target.host = relative3.host;
-          target.port = relative3.port;
-          target.path = removeDotSegments(relative3.path || "");
-          target.query = relative3.query;
+        if (relative4.userinfo !== void 0 || relative4.host !== void 0 || relative4.port !== void 0) {
+          target.userinfo = relative4.userinfo;
+          target.host = relative4.host;
+          target.port = relative4.port;
+          target.path = removeDotSegments(relative4.path || "");
+          target.query = relative4.query;
         } else {
-          if (!relative3.path) {
+          if (!relative4.path) {
             target.path = base.path;
-            if (relative3.query !== void 0) {
-              target.query = relative3.query;
+            if (relative4.query !== void 0) {
+              target.query = relative4.query;
             } else {
               target.query = base.query;
             }
           } else {
-            if (relative3.path[0] === "/") {
-              target.path = removeDotSegments(relative3.path);
+            if (relative4.path[0] === "/") {
+              target.path = removeDotSegments(relative4.path);
             } else {
               if ((base.userinfo !== void 0 || base.host !== void 0 || base.port !== void 0) && !base.path) {
-                target.path = "/" + relative3.path;
+                target.path = "/" + relative4.path;
               } else if (!base.path) {
-                target.path = relative3.path;
+                target.path = relative4.path;
               } else {
-                target.path = base.path.slice(0, base.path.lastIndexOf("/") + 1) + relative3.path;
+                target.path = base.path.slice(0, base.path.lastIndexOf("/") + 1) + relative4.path;
               }
               target.path = removeDotSegments(target.path);
             }
-            target.query = relative3.query;
+            target.query = relative4.query;
           }
           target.userinfo = base.userinfo;
           target.host = base.host;
@@ -3635,7 +3635,7 @@ var require_fast_uri = __commonJS({
         }
         target.scheme = base.scheme;
       }
-      target.fragment = relative3.fragment;
+      target.fragment = relative4.fragment;
       return target;
     }
     function equal(uriA, uriB, options) {
@@ -7250,6 +7250,100 @@ import { fileURLToPath as fileURLToPath2 } from "node:url";
 import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
 
+// src/shared/exclusions.ts
+import picomatch from "picomatch";
+var DEFAULT_SKIP_DIRS = /* @__PURE__ */ new Set([
+  // Package managers / vendored deps
+  "node_modules",
+  "vendor",
+  // Version control
+  ".git",
+  // Build outputs (general)
+  "dist",
+  "build",
+  "bundle",
+  "out",
+  "target",
+  "coverage",
+  // Framework build outputs
+  ".next",
+  // Next.js
+  ".nuxt",
+  // Nuxt 2
+  ".output",
+  // Nuxt 3
+  ".vercel",
+  // Vercel
+  ".svelte-kit",
+  // SvelteKit
+  ".astro",
+  // Astro
+  ".angular",
+  // Angular
+  ".turbo",
+  // Turborepo
+  ".parcel-cache",
+  // Parcel
+  ".expo",
+  // Expo / React Native
+  // Language-specific caches
+  ".venv",
+  "venv",
+  "__pycache__",
+  ".cache",
+  ".dart_tool",
+  // Dart / Flutter
+  ".gradle",
+  // Gradle
+  // IDE state
+  ".idea",
+  // Plugin state
+  ".claude-crap",
+  ".codesight"
+]);
+var DEFAULT_SKIP_PATTERNS = [
+  "*.min.js",
+  "*.min.css",
+  "*.min.mjs",
+  "*.min.cjs",
+  "*.bundle.js",
+  "*.chunk.js"
+];
+function createExclusionFilter(userExclusions) {
+  const extraDirs = /* @__PURE__ */ new Set();
+  const fileGlobs = [];
+  for (const pattern of userExclusions ?? []) {
+    if (pattern.endsWith("/")) {
+      extraDirs.add(pattern.slice(0, -1));
+    } else {
+      fileGlobs.push(pattern);
+    }
+  }
+  const defaultFileMatchers = DEFAULT_SKIP_PATTERNS.map(
+    (p) => picomatch(p, { dot: true })
+  );
+  const userFileMatchers = fileGlobs.map(
+    (p) => picomatch(p, { dot: true })
+  );
+  return {
+    shouldSkipDir(dirName) {
+      if (dirName.startsWith(".") && dirName !== ".claude-plugin") {
+        return DEFAULT_SKIP_DIRS.has(dirName) || true;
+      }
+      return DEFAULT_SKIP_DIRS.has(dirName) || extraDirs.has(dirName);
+    },
+    shouldSkipFile(relativePath, fileName) {
+      for (const matcher of defaultFileMatchers) {
+        if (matcher(fileName)) return true;
+      }
+      for (const matcher of userFileMatchers) {
+        if (matcher(relativePath) || matcher(fileName)) return true;
+      }
+      return false;
+    }
+  };
+}
+
 // src/metrics/tdr.ts
 var RATING_ORDER = ["A", "B", "C", "D", "E"];
 function ratingToRank(rating) {
@@ -7535,7 +7629,7 @@ async function startDashboard(options) {
     if (!options.astEngine) {
       return { threshold: config.cyclomaticMax, totalFunctions: 0, violationCount: 0, topFunctions: [] };
     }
-    return buildComplexityReport(config, options.astEngine, logger2);
+    return buildComplexityReport(config, options.astEngine, logger2, options.exclude);
   });
   fastify.get("/api/file-detail", async (request, reply) => {
     const { path: filePath } = request.query;
@@ -7681,24 +7775,9 @@ async function killStaleDashboard(pidFilePath, port, logger2) {
   removePidFile(pidFilePath);
   await new Promise((r) => setTimeout(r, 300));
 }
-var SKIP_DIRS = /* @__PURE__ */ new Set([
-  "node_modules",
-  ".git",
-  "dist",
-  "build",
-  "out",
-  "target",
-  ".venv",
-  "venv",
-  "__pycache__",
-  ".cache",
-  ".next",
-  ".nuxt",
-  ".claude-crap",
-  ".codesight"
-]);
-async function buildComplexityReport(config, engine, logger2) {
+async function buildComplexityReport(config, engine, logger2, exclude) {
   const threshold = config.cyclomaticMax;
+  const filter = createExclusionFilter(exclude);
   const allFunctions = [];
   let totalFunctions = 0;
   async function walk2(dir) {
@@ -7709,10 +7788,9 @@ async function buildComplexityReport(config, engine, logger2) {
       return;
     }
     for (const entry of entries) {
-      if (entry.name.startsWith(".") && entry.name !== ".claude-plugin") continue;
       const full = join2(dir, entry.name);
       if (entry.isDirectory()) {
-        if (SKIP_DIRS.has(entry.name)) continue;
+        if (filter.shouldSkipDir(entry.name)) continue;
         await walk2(full);
         continue;
       }
@@ -7791,23 +7869,7 @@ function computeCrap(input, threshold) {
 
 // src/metrics/workspace-walker.ts
 import { promises as fs4 } from "node:fs";
-import { join as join3 } from "node:path";
-var SKIP_DIRS2 = /* @__PURE__ */ new Set([
-  "node_modules",
-  ".git",
-  "dist",
-  "build",
-  "out",
-  "target",
-  ".venv",
-  "venv",
-  "__pycache__",
-  ".cache",
-  ".next",
-  ".nuxt",
-  ".claude-crap",
-  ".codesight"
-]);
+import { join as join3, relative } from "node:path";
 var CODE_EXTENSIONS = /* @__PURE__ */ new Set([
   ".ts",
   ".tsx",
@@ -7831,7 +7893,8 @@ var CODE_EXTENSIONS = /* @__PURE__ */ new Set([
   ".vue"
 ]);
 var MAX_FILES_WALKED = 2e4;
-async function estimateWorkspaceLoc(workspaceRoot) {
+async function estimateWorkspaceLoc(workspaceRoot, options) {
+  const filter = createExclusionFilter(options?.exclude);
   let physicalLoc = 0;
   let fileCount = 0;
   let truncated = false;
@@ -7845,10 +7908,9 @@ async function estimateWorkspaceLoc(workspaceRoot) {
     }
     for (const entry of entries) {
       if (truncated) return;
-      if (entry.name.startsWith(".") && entry.name !== ".claude-plugin") continue;
       const full = join3(dir, entry.name);
       if (entry.isDirectory()) {
-        if (SKIP_DIRS2.has(entry.name)) continue;
+        if (filter.shouldSkipDir(entry.name)) continue;
         await walk2(full);
         continue;
       }
@@ -7858,6 +7920,8 @@ async function estimateWorkspaceLoc(workspaceRoot) {
       if (dot < 0) continue;
       const ext = lower.substring(dot);
       if (!CODE_EXTENSIONS.has(ext)) continue;
+      const relPath = relative(workspaceRoot, full);
+      if (filter.shouldSkipFile(relPath, entry.name)) continue;
       fileCount += 1;
       if (fileCount > MAX_FILES_WALKED) {
         truncated = true;
@@ -8227,6 +8291,8 @@ var CrapConfigError = class extends Error {
   }
 };
 function loadCrapConfig(options) {
+  const fileResult = readFromFile(options.workspaceRoot);
+  const exclude = fileResult?.exclude ?? [];
   const envRaw = process.env["CLAUDE_CRAP_STRICTNESS"];
   if (typeof envRaw === "string" && envRaw.trim() !== "") {
     const normalized = envRaw.trim().toLowerCase();
@@ -8235,11 +8301,12 @@ function loadCrapConfig(options) {
         `[crap-config] CLAUDE_CRAP_STRICTNESS="${envRaw}" is not a valid strictness. Expected one of: ${STRICTNESS_VALUES.join(", ")}.`
       );
     }
-    return { strictness: normalized, strictnessSource: "env" };
+    return { strictness: normalized, strictnessSource: "env", exclude };
   }
-  const fromFile = readFromFile(options.workspaceRoot);
-  if (fromFile) return { strictness: fromFile, strictnessSource: "file" };
-  return { strictness: DEFAULT_STRICTNESS, strictnessSource: "default" };
+  if (fileResult?.strictness) {
+    return { strictness: fileResult.strictness, strictnessSource: "file", exclude };
+  }
+  return { strictness: DEFAULT_STRICTNESS, strictnessSource: "default", exclude };
 }
 function readFromFile(workspaceRoot) {
   const filePath = join5(workspaceRoot, ".claude-crap.json");
@@ -8267,20 +8334,40 @@ function readFromFile(workspaceRoot) {
     );
   }
   const doc = parsed;
-  if (!("strictness" in doc)) return null;
-  const value = doc["strictness"];
-  if (typeof value !== "string") {
-    throw new CrapConfigError(
-      `[crap-config] ${filePath}: 'strictness' must be a string, got ${typeof value}`
-    );
+  let strictness = null;
+  if ("strictness" in doc) {
+    const value = doc["strictness"];
+    if (typeof value !== "string") {
+      throw new CrapConfigError(
+        `[crap-config] ${filePath}: 'strictness' must be a string, got ${typeof value}`
+      );
+    }
+    const normalized = value.trim().toLowerCase();
+    if (!isStrictness(normalized)) {
+      throw new CrapConfigError(
+        `[crap-config] ${filePath}: 'strictness' is "${value}"; expected one of ${STRICTNESS_VALUES.join(", ")}.`
+      );
+    }
+    strictness = normalized;
   }
-  const normalized = value.trim().toLowerCase();
-  if (!isStrictness(normalized)) {
-    throw new CrapConfigError(
-      `[crap-config] ${filePath}: 'strictness' is "${value}"; expected one of ${STRICTNESS_VALUES.join(", ")}.`
-    );
+  let exclude = [];
+  if ("exclude" in doc) {
+    const raw2 = doc["exclude"];
+    if (!Array.isArray(raw2)) {
+      throw new CrapConfigError(
+        `[crap-config] ${filePath}: 'exclude' must be an array of strings`
+      );
+    }
+    for (const item of raw2) {
+      if (typeof item !== "string") {
+        throw new CrapConfigError(
+          `[crap-config] ${filePath}: every entry in 'exclude' must be a string, got ${typeof item}`
+        );
+      }
+    }
+    exclude = raw2;
   }
-  return normalized;
+  return { strictness, exclude };
 }
 function isStrictness(value) {
   return STRICTNESS_VALUES.includes(value);
@@ -8288,7 +8375,7 @@ function isStrictness(value) {
 
 // src/tools/test-harness.ts
 import { promises as fs6 } from "node:fs";
-import { basename, dirname as dirname4, extname, isAbsolute as isAbsolute3, join as join6, relative, resolve as resolve5, sep as sep2 } from "node:path";
+import { basename, dirname as dirname4, extname, isAbsolute as isAbsolute3, join as join6, relative as relative2, resolve as resolve5, sep as sep2 } from "node:path";
 var TEST_SUFFIX_PATTERN = /\.(test|spec)\./;
 function isTestFile(filePath) {
   const base = basename(filePath);
@@ -8303,7 +8390,7 @@ function candidatePaths(workspaceRoot, filePath) {
   const base = basename(absSource, ext);
   const dir = dirname4(absSource);
   const absWorkspace = resolve5(workspaceRoot);
-  const relFromRoot = relative(absWorkspace, absSource);
+  const relFromRoot = relative2(absWorkspace, absSource);
   const relDir = dirname4(relFromRoot);
   const candidates = /* @__PURE__ */ new Set();
   candidates.add(join6(dir, `${base}.test${ext}`));
@@ -8896,23 +8983,7 @@ function buildResult(projectType, steps, autoScanResult, recommendation) {
 
 // src/scanner/complexity-scanner.ts
 import { promises as fs7 } from "node:fs";
-import { join as join10, relative as relative2 } from "node:path";
-var SKIP_DIRS3 = /* @__PURE__ */ new Set([
-  "node_modules",
-  ".git",
-  "dist",
-  "build",
-  "out",
-  "target",
-  ".venv",
-  "venv",
-  "__pycache__",
-  ".cache",
-  ".next",
-  ".nuxt",
-  ".claude-crap",
-  ".codesight"
-]);
+import { join as join10, relative as relative3 } from "node:path";
 var MAX_FILES = 2e4;
 var RULE_ID = "complexity/cyclomatic-max";
 var SOURCE_TOOL = "complexity";
@@ -8920,7 +8991,8 @@ async function scanComplexity(workspaceRoot, engine, sarifStore, config, logger2
   const start = Date.now();
   const threshold = config.cyclomaticMax;
   const errorThreshold = threshold * 2;
-  const files = await collectSourceFiles(workspaceRoot);
+  const filter = createExclusionFilter(config.exclude);
+  const files = await collectSourceFiles(workspaceRoot, filter);
   logger2.info(
     { fileCount: files.length, threshold },
     "complexity-scanner: starting analysis"
@@ -8939,7 +9011,7 @@ async function scanComplexity(workspaceRoot, engine, sarifStore, config, logger2
       for (const fn of metrics.functions) {
         if (fn.cyclomaticComplexity <= threshold) continue;
         const level = fn.cyclomaticComplexity >= errorThreshold ? "error" : "warning";
-        const relPath = relative2(workspaceRoot, filePath);
+        const relPath = relative3(workspaceRoot, filePath);
         sarifResults.push({
           ruleId: RULE_ID,
           level,
@@ -8990,7 +9062,7 @@ async function scanComplexity(workspaceRoot, engine, sarifStore, config, logger2
   );
   return { filesScanned, functionsAnalyzed, violations, durationMs };
 }
-async function collectSourceFiles(workspaceRoot) {
+async function collectSourceFiles(workspaceRoot, filter) {
   const files = [];
   let truncated = false;
   async function walk2(dir) {
@@ -9003,15 +9075,16 @@ async function collectSourceFiles(workspaceRoot) {
     }
     for (const entry of entries) {
       if (truncated) return;
-      if (entry.name.startsWith(".") && entry.name !== ".claude-plugin") continue;
       const full = join10(dir, entry.name);
       if (entry.isDirectory()) {
-        if (SKIP_DIRS3.has(entry.name)) continue;
+        if (filter.shouldSkipDir(entry.name)) continue;
         await walk2(full);
         continue;
       }
       if (!entry.isFile()) continue;
       if (!detectLanguageFromPath(entry.name)) continue;
+      const relPath = relative3(workspaceRoot, full);
+      if (filter.shouldSkipFile(relPath, entry.name)) continue;
       files.push(full);
       if (files.length >= MAX_FILES) {
         truncated = true;
@@ -9177,7 +9250,7 @@ async function autoScan(workspaceRoot, sarifStore, logger2, options) {
         workspaceRoot,
         options.engine,
         sarifStore,
-        { cyclomaticMax: options.cyclomaticMax ?? 15 },
+        { cyclomaticMax: options.cyclomaticMax ?? 15, ...options.exclude ? { exclude: options.exclude } : {} },
         logger2
       );
       totalFindings += complexityScan.violations;
@@ -9373,6 +9446,15 @@ async function main() {
     { config: { ...config, pluginRoot: "<redacted>" } },
     "claude-crap MCP server starting"
   );
+  let userExclusions = [];
+  try {
+    const crapConfig = loadCrapConfig({ workspaceRoot: config.pluginRoot });
+    userExclusions = crapConfig.exclude;
+    if (userExclusions.length > 0) {
+      logger.info({ exclude: userExclusions }, "user exclusions loaded from .claude-crap.json");
+    }
+  } catch {
+  }
   const astEngine = new TreeSitterEngine();
   const sarifStore = new SarifStore({
     workspaceRoot: config.pluginRoot,
@@ -9388,9 +9470,10 @@ async function main() {
     dashboard = await startDashboard({
       config,
       sarifStore,
-      workspaceStatsProvider: () => estimateWorkspaceLoc(config.pluginRoot),
+      workspaceStatsProvider: () => estimateWorkspaceLoc(config.pluginRoot, { exclude: userExclusions }),
       logger,
-      astEngine
+      astEngine,
+      exclude: userExclusions
     });
   } catch (err) {
     logger.warn(
@@ -9560,7 +9643,7 @@ async function main() {
         const typed = args ?? {};
         const format = typed.format ?? "both";
         try {
-          const workspace = await estimateWorkspaceLoc(config.pluginRoot);
+          const workspace = await estimateWorkspaceLoc(config.pluginRoot, { exclude: userExclusions });
           const score = computeProjectScore({
             workspaceRoot: config.pluginRoot,
             minutesPerLoc: config.minutesPerLoc,
@@ -9783,7 +9866,8 @@ async function main() {
         try {
           const result = await autoScan(config.pluginRoot, sarifStore, logger, {
             engine: astEngine,
-            cyclomaticMax: config.cyclomaticMax
+            cyclomaticMax: config.cyclomaticMax,
+            exclude: userExclusions
           });
           const markdown = renderAutoScanMarkdown(result);
           return {
@@ -9862,7 +9946,8 @@ async function main() {
   logger.info("claude-crap MCP server ready (stdio)");
   autoScan(config.pluginRoot, sarifStore, logger, {
     engine: astEngine,
-    cyclomaticMax: config.cyclomaticMax
+    cyclomaticMax: config.cyclomaticMax,
+    exclude: userExclusions
   }).then((result) => {
     const scanners = result.results.filter((r) => r.success).map((r) => r.scanner);
     logger.info(
