@@ -232,13 +232,14 @@ describe("MCP server integration", { skip: !serverBuilt }, () => {
     assert.ok(child && !child.killed, "server child should be running");
   });
 
-  it("exposes all seven tools via tools/list", async () => {
+  it("exposes all eight tools via tools/list", async () => {
     const response = await client!.request<{ result?: { tools?: Array<{ name: string }> } }>(
       "tools/list",
     );
     const names = (response.result?.tools ?? []).map((t) => t.name).sort();
     assert.deepEqual(names, [
       "analyze_file_ast",
+      "auto_scan",
       "compute_crap",
       "compute_tdr",
       "ingest_sarif",
