@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.6] - 2026-04-12
+
+### Fixed
+
+- **Auto-sync plugin cache on build** — `npm run build:plugin` now
+  detects cached versions under `~/.claude/plugins/cache/` and syncs
+  the freshly built files in-place. Eliminates the stale-cache problem
+  where rebuilding had no effect until manual `/plugin install`.
+- **PID file for dashboard port reuse** — dashboard writes
+  `.claude-crap/dashboard.pid` and kills stale processes on startup
+  so the port is always reclaimed (no more drift to 5118/5119).
+- **Unused import** — removed leftover `createTcpServer` import.
+
 ## [0.3.5] - 2026-04-12
 
 ### Fixed
