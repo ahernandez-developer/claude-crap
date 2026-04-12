@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.4] - 2026-04-12
+
+### Fixed
+
+- **Out-of-the-box MCP server startup** — added `launcher.mjs` bootstrap
+  wrapper that auto-installs runtime dependencies on first run. Fresh
+  git-based installs no longer fail with `ERR_MODULE_NOT_FOUND`.
+- **Dashboard port conflict across sessions** — when port 5117 is
+  occupied by a stale process, the dashboard now probes up to 4
+  consecutive fallback ports (5118–5121) before giving up.
+- **Deterministic installs** — `plugin/package-lock.json` is now
+  generated during `build:plugin` so all users resolve identical
+  dependency versions.
+
+### Changed
+
+- MCP server entry point in `.mcp.json` changed from `mcp-server.mjs`
+  to `launcher.mjs` (the launcher dynamically imports `mcp-server.mjs`
+  after ensuring dependencies exist).
+
 ## [0.3.3] - 2026-04-12
 
 ### Fixed
