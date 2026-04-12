@@ -81,7 +81,7 @@ task close — no further setup required.
 > **Two install channels are live:**
 >
 > - **npm** — `npx claude-crap install` (direct, works anywhere `npx` does)
-> - **Claude Code marketplace** — `/plugin marketplace add https://github.com/ahernandez-developer/claude-crap` followed by `/plugin install claude-crap@herz`. Claude Code resolves the marketplace entry's `source` to `claude-crap@0.1.0` on the npm registry, so both routes unpack the **same tarball** and get the same SHA.
+> - **Claude Code marketplace** — `/plugin marketplace add https://github.com/ahernandez-developer/claude-crap` followed by `/plugin install claude-crap@herz`. Claude Code resolves the marketplace entry's `source` to `claude-crap@0.3.4` on the npm registry, so both routes unpack the **same tarball** and get the same SHA.
 
 ### Marketplace cache troubleshooting
 

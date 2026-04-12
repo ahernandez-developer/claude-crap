@@ -1,0 +1,15 @@
+import js from "@eslint/js";
+
+export default [
+  js.configs.recommended,
+  {
+    ignores: [
+      "dist/",
+      "node_modules/",
+      "coverage/",
+      "**/bundle/",
+      "**/vendor/",
+      "**/*.min.js",
+    ],
+  },
+];

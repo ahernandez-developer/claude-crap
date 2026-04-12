@@ -1,6 +1,7 @@
 // scripts/bundle-plugin.mjs
 import { build } from "esbuild";
 import { cp, mkdir, rm } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -66,6 +67,35 @@ async function main() {
     resolve(BUNDLE_DIR, "dashboard/public"),
     { recursive: true },
   );
+
+  // 4. Copy the launcher wrapper into the bundle directory.
+  //    launcher.mjs is the .mcp.json entry point and is hand-written
+  //    (not bundled by esbuild). It ensures node_modules/ exist before
+  //    dynamically importing the real MCP server.
+  await cp(
+    resolve(ROOT, "plugin/launcher.mjs"),
+    resolve(BUNDLE_DIR, "launcher.mjs"),
+  );
+
+  // 5. Generate plugin/package-lock.json for deterministic installs.
+  //    This lockfile ships with the plugin so that the launcher's
+  //    `npm install --omit=dev` resolves the exact same versions on
+  //    every developer's machine. `--package-lock-only` does NOT
+  //    create node_modules/, keeping the repo light.
+  try {
+    execFileSync("npm", [
+      "install",
+      "--package-lock-only",
+      "--omit=dev",
+    ], {
+      cwd: resolve(ROOT, "plugin"),
+      stdio: ["ignore", "inherit", "inherit"],
+    });
+  } catch (err) {
+    process.stderr.write(
+      `warning: could not generate plugin/package-lock.json: ${err.message}\n`,
+    );
+  }
 }
 
 main().catch((err) => {

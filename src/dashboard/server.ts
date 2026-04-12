@@ -25,6 +25,7 @@
  */
 
 import { promises as fs } from "node:fs";
+import { createServer as createTcpServer } from "node:net";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -99,7 +100,7 @@ export async function startDashboard(options: StartDashboardOptions): Promise<Da
   // ------------------------------------------------------------------
   // /api/health — liveness probe
   // ------------------------------------------------------------------
-  fastify.get("/api/health", async () => ({ status: "ok", server: "claude-crap", version: "0.3.2" }));
+  fastify.get("/api/health", async () => ({ status: "ok", server: "claude-crap", version: "0.3.4" }));
 
   // ------------------------------------------------------------------
   // /api/score — live project score
@@ -125,8 +126,22 @@ export async function startDashboard(options: StartDashboardOptions): Promise<Da
     return reply.sendFile("index.html");
   });
 
-  await fastify.listen({ port: config.dashboardPort, host: "127.0.0.1" });
-  const url = `http://127.0.0.1:${config.dashboardPort}`;
+  // Find a free port. The configured port is tried first, then up to
+  // MAX_PORT_RETRIES consecutive neighbors. This handles the common
+  // case where a previous Claude Code session left a stale MCP server
+  // process holding the default port.
+  const MAX_PORT_RETRIES = 4;
+  const boundPort = await findFreePort(config.dashboardPort, MAX_PORT_RETRIES, logger);
+
+  await fastify.listen({ port: boundPort, host: "127.0.0.1" });
+
+  const url = `http://127.0.0.1:${boundPort}`;
+  if (boundPort !== config.dashboardPort) {
+    logger.warn(
+      { url, configuredPort: config.dashboardPort, actualPort: boundPort },
+      "claude-crap dashboard bound to fallback port (configured port was in use)",
+    );
+  }
   logger.info({ url, publicRoot }, "claude-crap dashboard listening");
 
   return {
@@ -186,6 +201,56 @@ function urlOf(fastify: FastifyInstance, config: CrapConfig): string {
     return `http://${host}:${first.port}`;
   }
   return `http://127.0.0.1:${config.dashboardPort}`;
+}
+
+/**
+ * Probe a sequence of TCP ports starting at `startPort` and return the
+ * first one that is free. Uses a raw `net.createServer()` probe that
+ * opens and immediately closes to avoid interfering with Fastify's own
+ * listen lifecycle (Fastify instances cannot re-listen after close).
+ *
+ * @param startPort     The preferred port.
+ * @param maxRetries    How many consecutive ports to try after the first.
+ * @param logger        Pino logger for diagnostics.
+ * @returns             The first free port found.
+ * @throws              When all candidate ports are occupied.
+ */
+async function findFreePort(
+  startPort: number,
+  maxRetries: number,
+  logger: Logger,
+): Promise<number> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const candidatePort = startPort + attempt;
+    const isFree = await new Promise<boolean>((resolvePromise) => {
+      const probe = createTcpServer();
+      probe.once("error", (err: NodeJS.ErrnoException) => {
+        if (err.code === "EADDRINUSE") {
+          resolvePromise(false);
+        } else {
+          // Unexpected error (permission denied, etc.) — treat as unavailable.
+          resolvePromise(false);
+        }
+      });
+      probe.listen({ port: candidatePort, host: "127.0.0.1" }, () => {
+        probe.close(() => resolvePromise(true));
+      });
+    });
+
+    if (isFree) return candidatePort;
+
+    if (attempt < maxRetries) {
+      logger.info(
+        { port: candidatePort, nextPort: candidatePort + 1 },
+        "dashboard port in use, trying next",
+      );
+    }
+  }
+
+  // All ports exhausted — throw so startDashboard rejects gracefully.
+  throw new Error(
+    `[claude-crap] dashboard: all ports ${startPort}–${startPort + maxRetries} are in use`,
+  );
 }
 
 /**
