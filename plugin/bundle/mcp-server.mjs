@@ -7618,7 +7618,7 @@ async function startDashboard(options) {
     root: publicRoot,
     prefix: "/"
   });
-  fastify.get("/api/health", async () => ({ status: "ok", server: "claude-crap", version: "0.3.7" }));
+  fastify.get("/api/health", async () => ({ status: "ok", server: "claude-crap", version: "0.3.8" }));
   fastify.get("/api/score", async () => {
     const stats = await workspaceStatsProvider();
     const score = await buildScore(config, sarifStore, stats, urlOf(fastify, config));
