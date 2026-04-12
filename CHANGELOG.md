@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-04-12
+
+Scanner bootstrapping and automated releases. Projects with no
+scanner configured now get one installed automatically, and the
+release pipeline is fully automated via GitHub Actions.
+
+### Added
+
+- **`bootstrap_scanner` MCP tool** — detects the project type
+  (JavaScript, TypeScript, Python, Java, C#) and installs the
+  appropriate scanner:
+  - JS/TS → ESLint (`npm install --save-dev` + `eslint.config.mjs`)
+  - Python → Bandit (returns install instructions)
+  - Java / C# → Semgrep (returns install instructions)
+  - Unknown → Semgrep (polyglot fallback)
+  After installation, runs `auto_scan` to immediately ingest findings.
+- **`src/scanner/bootstrap.ts`** — project-type detection aligned
+  with the five tree-sitter supported languages (`javascript`,
+  `typescript`, `python`, `java`, `c_sharp`), ESLint flat config
+  generation, and npm install orchestration.
+- **`.github/workflows/release.yml`** — automated release pipeline.
+  Push a `v*` tag to trigger: typecheck → build → test → npm publish
+  → GitHub Release with changelog extraction. Requires `NPM_TOKEN`
+  secret.
+- **17 new tests** in `scanner-bootstrap.test.ts` for project-type
+  detection and ESLint config generation. Suite total: 225 tests,
+  37 suites.
+
+### Changed
+
+- MCP tools count: 8 → 9 (added `bootstrap_scanner`).
+- Test counts in README updated to 225 / 37.
+
 ## [0.2.0] - 2026-04-12
 
 Built-in scanner auto-detection and execution. Users now get real

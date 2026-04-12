@@ -8454,6 +8454,215 @@ async function autoScan(workspaceRoot, sarifStore, logger2) {
   };
 }
 
+// src/scanner/bootstrap.ts
+import { existsSync as existsSync3, writeFileSync, readdirSync } from "node:fs";
+import { join as join8 } from "node:path";
+import { execFile as execFile3 } from "node:child_process";
+function detectProjectType(workspaceRoot) {
+  const has = (file) => existsSync3(join8(workspaceRoot, file));
+  if (has("package.json")) {
+    if (has("tsconfig.json")) return "typescript";
+    return "javascript";
+  }
+  if (has("pyproject.toml") || has("setup.py") || has("requirements.txt")) {
+    return "python";
+  }
+  if (has("pom.xml") || has("build.gradle") || has("build.gradle.kts")) {
+    return "java";
+  }
+  if (has("Directory.Build.props")) return "csharp";
+  try {
+    const entries = readdirSync(workspaceRoot);
+    if (entries.some((e) => e.endsWith(".csproj") || e.endsWith(".sln"))) {
+      return "csharp";
+    }
+  } catch {
+  }
+  return "unknown";
+}
+function generateEslintConfig(isTypeScript) {
+  if (isTypeScript) {
+    return `import js from "@eslint/js";
+import tseslint from "typescript-eslint";
+
+export default tseslint.config(
+  js.configs.recommended,
+  ...tseslint.configs.recommended,
+  {
+    ignores: ["dist/", "node_modules/", "coverage/"],
+  },
+);
+`;
+  }
+  return `import js from "@eslint/js";
+
+export default [
+  js.configs.recommended,
+  {
+    ignores: ["dist/", "node_modules/", "coverage/"],
+  },
+];
+`;
+}
+function npmInstall(workspaceRoot, packages) {
+  return new Promise((resolve6) => {
+    execFile3(
+      "npm",
+      ["install", "--save-dev", ...packages],
+      {
+        cwd: workspaceRoot,
+        timeout: 12e4,
+        env: { ...process.env, FORCE_COLOR: "0" }
+      },
+      (err, stdout, stderr) => {
+        if (err) {
+          resolve6({
+            action: `npm install --save-dev ${packages.join(" ")}`,
+            success: false,
+            detail: stderr || err.message
+          });
+          return;
+        }
+        resolve6({
+          action: `npm install --save-dev ${packages.join(" ")}`,
+          success: true,
+          detail: `installed ${packages.join(", ")}`
+        });
+      }
+    );
+  });
+}
+function writeEslintConfigFile(workspaceRoot, isTypeScript) {
+  const configPath = join8(workspaceRoot, "eslint.config.mjs");
+  if (existsSync3(configPath)) {
+    return {
+      action: "create eslint.config.mjs",
+      success: true,
+      detail: "eslint.config.mjs already exists \u2014 skipped"
+    };
+  }
+  try {
+    writeFileSync(configPath, generateEslintConfig(isTypeScript), "utf-8");
+    return {
+      action: "create eslint.config.mjs",
+      success: true,
+      detail: `created eslint.config.mjs (${isTypeScript ? "TypeScript" : "JavaScript"} template)`
+    };
+  } catch (err) {
+    return {
+      action: "create eslint.config.mjs",
+      success: false,
+      detail: err.message
+    };
+  }
+}
+function getRecommendation(projectType) {
+  switch (projectType) {
+    case "javascript":
+    case "typescript":
+      return {
+        scanner: "eslint",
+        canAutoInstall: true,
+        installInstructions: "npm install --save-dev eslint @eslint/js"
+      };
+    case "python":
+      return {
+        scanner: "bandit",
+        canAutoInstall: false,
+        installInstructions: "pip install bandit  (or: pipx install bandit, poetry add --group dev bandit)"
+      };
+    case "java":
+    case "csharp":
+      return {
+        scanner: "semgrep",
+        canAutoInstall: false,
+        installInstructions: "brew install semgrep  (or: pip install semgrep, pipx install semgrep)"
+      };
+    case "unknown":
+      return {
+        scanner: "semgrep",
+        canAutoInstall: false,
+        installInstructions: "brew install semgrep  (or: pip install semgrep, pipx install semgrep)"
+      };
+  }
+}
+async function bootstrapScanner(workspaceRoot, sarifStore, logger2) {
+  const detections = await detectScanners(workspaceRoot);
+  const available = detections.filter((d) => d.available);
+  if (available.length > 0) {
+    const existingScanners = available.map((d) => d.scanner);
+    logger2.info(
+      { existingScanners },
+      "bootstrap: scanner(s) already configured \u2014 skipping"
+    );
+    return {
+      projectType: detectProjectType(workspaceRoot),
+      alreadyConfigured: true,
+      existingScanners,
+      steps: [],
+      autoScanResult: null,
+      success: true,
+      summary: `Scanner(s) already configured: ${existingScanners.join(", ")}. Run auto_scan to ingest findings.`
+    };
+  }
+  const projectType = detectProjectType(workspaceRoot);
+  const recommendation = getRecommendation(projectType);
+  const steps = [];
+  logger2.info(
+    { projectType, scanner: recommendation.scanner },
+    "bootstrap: detected project type"
+  );
+  if (recommendation.canAutoInstall) {
+    const isTypeScript = projectType === "typescript";
+    const packages = isTypeScript ? ["eslint", "@eslint/js", "typescript-eslint"] : ["eslint", "@eslint/js"];
+    const installStep = await npmInstall(workspaceRoot, packages);
+    steps.push(installStep);
+    if (installStep.success) {
+      const configStep = writeEslintConfigFile(workspaceRoot, isTypeScript);
+      steps.push(configStep);
+    }
+  } else {
+    steps.push({
+      action: `suggest ${recommendation.scanner} install`,
+      success: true,
+      detail: recommendation.installInstructions
+    });
+  }
+  const installSucceeded = steps.every((s) => s.success);
+  let autoScanResult = null;
+  if (installSucceeded && recommendation.canAutoInstall) {
+    try {
+      autoScanResult = await autoScan(workspaceRoot, sarifStore, logger2);
+    } catch (err) {
+      logger2.warn(
+        { err: err.message },
+        "bootstrap: auto_scan after install failed"
+      );
+    }
+  }
+  const findings = autoScanResult?.totalFindings ?? 0;
+  const scannerInstalled = recommendation.canAutoInstall && installSucceeded;
+  let summary;
+  if (scannerInstalled && autoScanResult) {
+    summary = `Installed ${recommendation.scanner} for ${projectType} project. Auto-scan found ${findings} finding(s).`;
+  } else if (scannerInstalled) {
+    summary = `Installed ${recommendation.scanner} for ${projectType} project. Auto-scan did not run.`;
+  } else if (!recommendation.canAutoInstall) {
+    summary = `Detected ${projectType} project. Install ${recommendation.scanner} manually: ${recommendation.installInstructions}`;
+  } else {
+    summary = `Failed to install ${recommendation.scanner}. Check the error details in the steps.`;
+  }
+  return {
+    projectType,
+    alreadyConfigured: false,
+    existingScanners: [],
+    steps,
+    autoScanResult,
+    success: installSucceeded,
+    summary
+  };
+}
+
 // src/schemas/tool-schemas.ts
 var computeCrapSchema = {
   type: "object",
@@ -8579,6 +8788,13 @@ var ingestScannerOutputSchema = {
     }
   },
   required: ["scanner", "rawOutput"],
+  additionalProperties: false
+};
+var bootstrapScannerSchema = {
+  type: "object",
+  description: "Detect the project type (JavaScript, TypeScript, Python, Java, C#), install the appropriate scanner (ESLint for JS/TS, Bandit for Python, Semgrep for Java/C#), create a minimal config file, and run auto_scan to verify. Skips installation if a scanner is already configured. Use this when auto_scan finds no scanners and quality grades are vacuously A.",
+  properties: {},
+  required: [],
   additionalProperties: false
 };
 var autoScanSchema = {
@@ -8712,6 +8928,11 @@ async function main() {
         name: "auto_scan",
         description: "Auto-detect available scanners (ESLint, Semgrep, Bandit, Stryker) in the workspace, run them, and ingest findings into the SARIF store.",
         inputSchema: autoScanSchema
+      },
+      {
+        name: "bootstrap_scanner",
+        description: "Detect project type, install the right scanner (ESLint for JS/TS, Bandit for Python, Semgrep for Java/C#), create minimal config, and run auto_scan to verify.",
+        inputSchema: bootstrapScannerSchema
       }
     ]
   }));
@@ -8993,6 +9214,35 @@ async function main() {
           };
         }
       }
+      case "bootstrap_scanner": {
+        logger.info({ tool: "bootstrap_scanner" }, "Tool call received");
+        try {
+          const result = await bootstrapScanner(config.pluginRoot, sarifStore, logger);
+          const markdown = renderBootstrapMarkdown(result);
+          return {
+            content: [
+              { type: "text", text: markdown },
+              { type: "text", text: JSON.stringify(result, null, 2) }
+            ],
+            isError: !result.success
+          };
+        } catch (err) {
+          logger.error({ err }, "bootstrap_scanner failed");
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify(
+                  { tool: "bootstrap_scanner", status: "error", message: err.message },
+                  null,
+                  2
+                )
+              }
+            ],
+            isError: true
+          };
+        }
+      }
       case "auto_scan": {
         logger.info({ tool: "auto_scan" }, "Tool call received");
         try {
@@ -9088,6 +9338,36 @@ async function main() {
       "auto-scan failed \u2014 continuing without it"
     );
   });
+}
+function renderBootstrapMarkdown(result) {
+  const lines = ["## claude-crap :: bootstrap scanner\n"];
+  lines.push(`**Project type:** ${result.projectType}`);
+  if (result.alreadyConfigured) {
+    lines.push(`**Status:** Scanner(s) already configured: ${result.existingScanners.join(", ")}`);
+    lines.push("\nNo installation needed. Run `auto_scan` to ingest findings.");
+    return lines.join("\n");
+  }
+  lines.push("");
+  if (result.steps.length > 0) {
+    lines.push("### Steps\n");
+    lines.push("| Action | Status | Detail |");
+    lines.push("| ------ | :----: | ------ |");
+    for (const s of result.steps) {
+      const status = s.success ? "ok" : "failed";
+      lines.push(`| ${s.action} | ${status} | ${s.detail} |`);
+    }
+    lines.push("");
+  }
+  if (result.autoScanResult) {
+    const r = result.autoScanResult;
+    const scanners = r.results.filter((s) => s.success).map((s) => s.scanner);
+    lines.push(
+      `**Auto-scan:** ${r.totalFindings} finding(s) ingested from ${scanners.join(", ") || "no scanners"} in ${(r.totalDurationMs / 1e3).toFixed(1)}s`
+    );
+    lines.push("");
+  }
+  lines.push(`**Summary:** ${result.summary}`);
+  return lines.join("\n");
 }
 function renderAutoScanMarkdown(result) {
   const lines = ["## claude-crap :: auto-scan results\n"];

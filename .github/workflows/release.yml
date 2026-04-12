@@ -1,0 +1,69 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: publish npm + GitHub Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        env:
+          CLAUDE_CRAP_SKIP_POSTINSTALL: '1'
+        run: npm ci --no-audit --no-fund
+
+      - name: TypeScript type check
+        run: npm run typecheck
+
+      - name: Build dist/
+        run: npm run build
+
+      - name: Build plugin/bundle/
+        run: npm run build:plugin
+
+      - name: Run tests
+        run: SONAR_TDR_ENTRY=plugin/bundle/tdr-engine.mjs npm test
+
+      - name: Publish to npm
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Extract changelog for this version
+        id: changelog
+        run: |
+          # Extract the section for this version from CHANGELOG.md
+          version="${{ steps.version.outputs.version }}"
+          awk "/^## \[${version}\]/{found=1; next} /^## \[/{if(found) exit} found{print}" CHANGELOG.md > /tmp/release-notes.md
+          # If no changelog section found, use a default message
+          if [ ! -s /tmp/release-notes.md ]; then
+            echo "Release ${version}" > /tmp/release-notes.md
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: v${{ steps.version.outputs.version }}
+          body_path: /tmp/release-notes.md
+          generate_release_notes: false
