@@ -9,11 +9,18 @@ pnpm-debug.log*
 *.tgz
 
 # --- TypeScript build output -------------------------------------------
-# `dist/` is rebuilt by the `postinstall` + `prepublishOnly` scripts and
-# shipped to the npm tarball via `package.json#files`. It is NOT tracked
-# in git so source-of-truth stays in `src/`.
+# `dist/` is rebuilt by postinstall + prepublishOnly for the npm library
+# distribution (`@sr-herz/claude-sonar/metrics` etc.). It is NOT tracked
+# in git. The git-source plugin distribution uses `plugin/bundle/` which
+# IS tracked — see `scripts/bundle-plugin.mjs`.
 dist/
 *.tsbuildinfo
+
+# --- Plugin bundle artifacts -------------------------------------------
+# plugin/bundle/*.mjs files are committed (they ARE the runtime artifact
+# for git-source installs). Source maps and node_modules are not.
+plugin/node_modules/
+plugin/bundle/**/*.map
 
 # --- claude-sonar workspace state --------------------------------------
 # The plugin writes its consolidated SARIF report and per-run metrics

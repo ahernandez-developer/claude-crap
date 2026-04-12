@@ -63,17 +63,18 @@ export default async function install(ctx) {
   // Success — tell the user exactly what to do next. We print the
   // Claude Code native command and also mention the marketplace path
   // for users who cloned the repo from GitHub.
+  const pluginDir = join(ctx.pluginRoot, "plugin");
   process.stdout.write(
     [
       "",
       `${paint.green(icons.ok)} claude-sonar is ready to register with Claude Code.`,
       "",
-      `  Plugin root: ${paint.cyan(ctx.pluginRoot)}`,
+      `  Plugin root: ${paint.cyan(pluginDir)}`,
       "",
       paint.bold("  Next steps — pick ONE of the following:"),
       "",
       "  1. Native Claude Code install from this directory:",
-      `       ${paint.cyan(`/plugin install ${ctx.pluginRoot}`)}`,
+      `       ${paint.cyan(`/plugin install ${pluginDir}`)}`,
       "",
       "  2. Marketplace install (if the plugin is published to GitHub):",
       `       ${paint.cyan("/plugin marketplace add ahernandez-developer/claude-sonar")}`,
@@ -109,23 +110,23 @@ async function checkNodeVersion() {
 }
 
 /**
- * Check that `dist/index.js` exists. The postinstall hook should have
- * built it automatically; this is a safety net for users who pulled
- * the repo without running `npm install`.
+ * Check that the plugin bundle exists (`plugin/bundle/mcp-server.mjs`).
+ * The postinstall hook should have built it automatically; this is a
+ * safety net for users who pulled the repo without running `npm install`.
  *
  * @param {string} pluginRoot
  * @returns {Promise<import("./lib/cli-ui.mjs").StepResult>}
  */
 async function checkDistBuilt(pluginRoot) {
-  const entry = join(pluginRoot, "dist", "index.js");
+  const entry = join(pluginRoot, "plugin", "bundle", "mcp-server.mjs");
   try {
     await fs.access(entry);
-    return { status: "ok", label: `MCP server is built`, detail: entry };
+    return { status: "ok", label: `MCP server bundle is built`, detail: entry };
   } catch {
     return {
       status: "fail",
-      label: `MCP server is NOT built`,
-      detail: `Expected ${entry}. Run \`npm run build\` from the plugin root.`,
+      label: `MCP server bundle is NOT built`,
+      detail: `Expected ${entry}. Run \`npm run build:plugin\` from the plugin root.`,
     };
   }
 }
@@ -139,7 +140,7 @@ async function checkDistBuilt(pluginRoot) {
  * @returns {Promise<import("./lib/cli-ui.mjs").StepResult>}
  */
 async function chmodHooks(pluginRoot) {
-  const hookDir = join(pluginRoot, "hooks");
+  const hookDir = join(pluginRoot, "plugin", "hooks");
   const entries = ["pre-tool-use.mjs", "post-tool-use.mjs", "stop-quality-gate.mjs", "session-start.mjs"];
   const fixed = [];
   for (const name of entries) {

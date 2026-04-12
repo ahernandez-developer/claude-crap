@@ -143,6 +143,8 @@ export async function startDashboard(options: StartDashboardOptions): Promise<Da
 async function resolvePublicRoot(logger: Logger): Promise<string> {
   const here = dirname(fileURLToPath(import.meta.url));
   const candidates = [
+    // 0. Bundled layout: plugin/bundle/mcp-server.mjs → ./dashboard/public
+    resolve(here, "dashboard", "public"),
     // 1. Compiled layout: dist/dashboard/server.js → ./public next to it
     //    (only present if a build step copies the assets — not used
     //    today, but accepted so a future copy step does not break us).

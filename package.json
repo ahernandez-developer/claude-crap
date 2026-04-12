@@ -1,6 +1,6 @@
 {
   "name": "@sr-herz/claude-sonar",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Deterministic QA plugin for Claude Code — CRAP index, Technical Debt Ratio, tree-sitter AST, SARIF 2.1.0, hooks, and a local Vue dashboard.",
   "keywords": [
     "claude-code",
@@ -66,17 +66,14 @@
     "bun": ">=1.0.0"
   },
   "files": [
-    ".claude-plugin",
-    ".mcp.json",
     "CHANGELOG.md",
     "CLAUDE.md",
     "LICENSE",
     "README.md",
     "bin",
     "dist",
-    "hooks",
+    "plugin",
     "scripts",
-    "skills",
     "src",
     "tsconfig.json"
   ],
@@ -84,7 +81,7 @@
     "build": "tsc -p tsconfig.json",
     "build:fast": "node ./scripts/build-fast.mjs",
     "build:watch": "tsc -p tsconfig.json --watch",
-    "start": "node ./dist/index.js --transport stdio",
+    "start": "node ./plugin/bundle/mcp-server.mjs --transport stdio",
     "dev": "tsx ./src/index.ts --transport stdio",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node ./scripts/run-tests.mjs \"./src/tests/**/*.test.ts\"",
@@ -98,8 +95,9 @@
     "status": "node ./bin/claude-sonar.mjs status",
     "bug-report": "node ./scripts/bug-report.mjs",
     "clean": "rm -rf ./dist",
+    "build:plugin": "node ./scripts/bundle-plugin.mjs",
     "postinstall": "node ./scripts/postinstall.mjs",
-    "prepublishOnly": "npm run clean && npm run build && npm test && npm audit --omit=dev --audit-level=high",
+    "prepublishOnly": "npm run clean && npm run build && npm run build:plugin && npm test && npm audit --omit=dev --audit-level=high",
     "release": "np",
     "release:patch": "np patch --no-cleanup",
     "release:minor": "np minor --no-cleanup",

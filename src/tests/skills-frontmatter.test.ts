@@ -28,7 +28,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const SKILLS_DIR = resolve(HERE, "..", "..", "skills");
+const SKILLS_DIR = resolve(HERE, "..", "..", "plugin", "skills");
 
 /**
  * Minimal YAML frontmatter parser covering the subset claude-sonar

@@ -47,10 +47,14 @@ export default async function status(ctx) {
   printKv("workspace cwd", process.cwd());
   printKv("Node.js", process.versions.node);
 
-  // -- dist/
+  // -- entrypoints
   const distEntry = join(ctx.pluginRoot, "dist", "index.js");
   const distOk = await exists(distEntry);
   printKv("dist/index.js", distOk ? paint.green("built") : paint.red("MISSING"));
+
+  const gitEntry = join(ctx.pluginRoot, "plugin", "bundle", "mcp-server.mjs");
+  const gitOk = await exists(gitEntry);
+  printKv("plugin/bundle/...", gitOk ? paint.green("built") : paint.red("MISSING"));
 
   // -- SARIF store
   const sarifDir = resolve(process.cwd(), ".claude-sonar", "reports");

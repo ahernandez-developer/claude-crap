@@ -46,15 +46,16 @@ const PLUGIN_ROOT = resolve(HERE, "..");
 
 const REQUIRED_FILES = [
   "package.json",
-  ".claude-plugin/plugin.json",
-  ".mcp.json",
-  "CLAUDE.md",
-  "hooks/hooks.json",
-  "hooks/pre-tool-use.mjs",
-  "hooks/post-tool-use.mjs",
-  "hooks/stop-quality-gate.mjs",
-  "hooks/session-start.mjs",
+  "plugin/.claude-plugin/plugin.json",
+  "plugin/.mcp.json",
+  "plugin/CLAUDE.md",
+  "plugin/hooks/hooks.json",
+  "plugin/hooks/pre-tool-use.mjs",
+  "plugin/hooks/post-tool-use.mjs",
+  "plugin/hooks/stop-quality-gate.mjs",
+  "plugin/hooks/session-start.mjs",
   "dist/index.js",
+  "plugin/bundle/mcp-server.mjs",
 ];
 
 /**
@@ -133,17 +134,26 @@ export async function generateBugReport(pluginRoot) {
   }
   lines.push("");
 
-  // --- dist state ---
+  // --- build state ---
   lines.push(`## Build state`);
   lines.push("");
   const distEntry = join(pluginRoot, "dist", "index.js");
   try {
     const stat = await fs.stat(distEntry);
-    lines.push(`- Path: \`${distEntry}\``);
-    lines.push(`- Size: ${stat.size} bytes`);
-    lines.push(`- Modified: ${new Date(stat.mtimeMs).toISOString()}`);
+    lines.push(`- npm entry: \`${distEntry}\``);
+    lines.push(`  - Size: ${stat.size} bytes`);
+    lines.push(`  - Modified: ${new Date(stat.mtimeMs).toISOString()}`);
   } catch {
-    lines.push(`- \`${distEntry}\` is missing. Run \`npm run build\`.`);
+    lines.push(`- npm entry: \`${distEntry}\` is missing. Run \`npm run build\`.`);
+  }
+  const gitEntry = join(pluginRoot, "plugin", "bundle", "mcp-server.mjs");
+  try {
+    const stat = await fs.stat(gitEntry);
+    lines.push(`- git entry: \`${gitEntry}\``);
+    lines.push(`  - Size: ${stat.size} bytes`);
+    lines.push(`  - Modified: ${new Date(stat.mtimeMs).toISOString()}`);
+  } catch {
+    lines.push(`- git entry: \`${gitEntry}\` is missing. Run \`npm run build:plugin\`.`);
   }
   lines.push("");
 

@@ -33,7 +33,7 @@ invoking them directly:
 ```bash
 CLAUDE_PROJECT_DIR=$(pwd) \
   echo '{"hook_event_name":"Stop","tool_name":"none","tool_input":{}}' \
-  | node ./hooks/stop-quality-gate.mjs
+  | node ./plugin/hooks/stop-quality-gate.mjs
 ```
 
 ## Test layout

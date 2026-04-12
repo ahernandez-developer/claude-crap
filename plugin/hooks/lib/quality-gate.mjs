@@ -13,9 +13,9 @@
  * violated policy. The calling hook then decides whether to block
  * (exit 2) or allow (exit 0) based on whether any failures were found.
  *
- * Engine imports (CRAP / TDR letter classification) come directly from
- * the compiled MCP server under `src/mcp-server/dist/`, so the math
- * stays in one place and the hook cannot drift from the server.
+ * Engine imports (CRAP / TDR letter classification) come from the
+ * esbuild-produced bundle at `plugin/bundle/tdr-engine.mjs`, so the
+ * math stays in one place and the hook cannot drift from the server.
  *
  * @module hooks/lib/quality-gate
  */
@@ -25,12 +25,11 @@ import { resolve, join, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
 
-// Import the TDR engines from the compiled MCP server. The relative path
-// resolves from `hooks/lib/` up to the plugin root then down into
-// `dist/`. Requires the plugin to have been built at least once via
-// `npm install` (which runs the postinstall build) or `npm run build`.
+// Import the TDR engines from the bundled MCP server. The relative path
+// resolves from `hooks/lib/` up to `plugin/bundle/`. Requires the
+// plugin to have been built at least once via `npm run build:plugin`.
 const HOOK_DIR = dirname(fileURLToPath(import.meta.url));
-const TDR_ENGINE_PATH = resolve(HOOK_DIR, "..", "..", "dist", "metrics", "tdr.js");
+const TDR_ENGINE_PATH = resolve(HOOK_DIR, "..", "..", "bundle", "tdr-engine.mjs");
 
 /**
  * @typedef {"A" | "B" | "C" | "D" | "E"} MaintainabilityRating

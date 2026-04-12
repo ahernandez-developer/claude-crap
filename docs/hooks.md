@@ -1,9 +1,9 @@
 # Hooks reference
 
 `claude-sonar` registers five Claude Code lifecycle hooks. Each one is
-a small Node.js script with no dependencies beyond `hooks/lib/`. The
-rules themselves live in `hooks/lib/gatekeeper-rules.mjs`,
-`hooks/lib/quality-gate.mjs`, and `hooks/lib/test-harness.mjs` so they
+a small Node.js script with no dependencies beyond `plugin/hooks/lib/`. The
+rules themselves live in `plugin/hooks/lib/gatekeeper-rules.mjs`,
+`plugin/hooks/lib/quality-gate.mjs`, and `plugin/hooks/lib/test-harness.mjs` so they
 can be unit-tested without spinning up Claude Code.
 
 ## Contract with Claude Code
@@ -16,12 +16,12 @@ can be unit-tested without spinning up Claude Code.
 | Exit codes | `0` allow · `2` block · any other code is treated as an internal error and fails open |
 
 Every hook wraps its entrypoint in `runHook(name, fn)` from
-`hooks/lib/hook-io.mjs`, which catches thrown errors and degrades to
+`plugin/hooks/lib/hook-io.mjs`, which catches thrown errors and degrades to
 fail-open so a buggy hook can never deadlock the user.
 
 ## Hook catalog
 
-### 1. `SessionStart` — `hooks/session-start.mjs`
+### 1. `SessionStart` — `plugin/hooks/session-start.mjs`
 
 Runs once when Claude Code starts a new session with this plugin
 active. Its job is to seed the agent's opening context with a
@@ -38,10 +38,10 @@ context. Fail-open: if the quality gate cannot run (MCP server not
 built yet), a stripped briefing is printed instead so the session
 still starts.
 
-### 2. `PreToolUse` — `hooks/pre-tool-use.mjs`
+### 2. `PreToolUse` — `plugin/hooks/pre-tool-use.mjs`
 
 Gatekeeper for every `Write` / `Edit` / `MultiEdit` / `NotebookEdit` /
-`Bash` tool call. Runs the rules in `hooks/lib/gatekeeper-rules.mjs`
+`Bash` tool call. Runs the rules in `plugin/hooks/lib/gatekeeper-rules.mjs`
 and aborts with exit 2 on the first blocking verdict.
 
 Rules, cheapest first:
@@ -56,7 +56,7 @@ Rules, cheapest first:
 Target latency: under 200 ms in the common case. No network I/O, no
 filesystem I/O beyond reading stdin.
 
-### 3. `PostToolUse` — `hooks/post-tool-use.mjs`
+### 3. `PostToolUse` — `plugin/hooks/post-tool-use.mjs`
 
 Retrospective verifier that runs after a successful mutation.
 **Non-blocking** by design — it emits warnings on stderr and exits 0.
@@ -68,7 +68,7 @@ Rules:
 
 | Rule ID | What it flags |
 | --- | --- |
-| `SONAR-TEST-MISSING` | Production source file with no accompanying test file (uses the resolver from `hooks/lib/test-harness.mjs`) |
+| `SONAR-TEST-MISSING` | Production source file with no accompanying test file (uses the resolver from `plugin/hooks/lib/test-harness.mjs`) |
 | `SONAR-SUPP-ESLINT-DISABLE` | `eslint-disable` / `eslint-disable-next-line` |
 | `SONAR-SUPP-TS-IGNORE` | `@ts-ignore` |
 | `SONAR-SUPP-TS-EXPECT-ERROR` | `@ts-expect-error` |
@@ -76,11 +76,11 @@ Rules:
 | `SONAR-SUPP-TYPE-IGNORE` | `# type: ignore` (mypy / pyright) |
 | `SONAR-TODO-MARKER` | `TODO`, `FIXME`, `XXX`, `HACK` markers (aggregated per file) |
 
-### 4. `Stop` and `SubagentStop` — `hooks/stop-quality-gate.mjs`
+### 4. `Stop` and `SubagentStop` — `plugin/hooks/stop-quality-gate.mjs`
 
 Final quality gate. When the agent (or a subagent) declares it is
 done, this hook reads the consolidated SARIF file, estimates
-workspace LOC with the bounded walker in `hooks/lib/quality-gate.mjs`,
+workspace LOC with the bounded walker in `plugin/hooks/lib/quality-gate.mjs`,
 computes the TDR, and evaluates every policy. Exit 2 means the agent
 must continue working; the structured corrective message goes to
 stderr.
@@ -93,16 +93,16 @@ Policies:
 | `SONAR-GATE-ERRORS` | One or more SARIF findings at level `"error"` survive to task close |
 
 The Stop hook **imports** `classifyTdr` and `ratingIsWorseThan`
-directly from the compiled MCP server's `dist/metrics/tdr.js`, so
-the classification logic is the single source of truth shared
+from the esbuild-produced bundle at `plugin/bundle/tdr-engine.mjs`,
+so the classification logic is the single source of truth shared
 between the hook and the MCP server. See [quality-gate.md](./quality-gate.md)
 for the underlying math.
 
 ## Adding a new hook
 
-1. Create `hooks/my-hook.mjs` and wrap its entrypoint in `runHook(...)`.
-2. Put its rules in `hooks/lib/my-rules.mjs` as pure functions.
-3. Register the hook in `hooks/hooks.json` under the matching
+1. Create `plugin/hooks/my-hook.mjs` and wrap its entrypoint in `runHook(...)`.
+2. Put its rules in `plugin/hooks/lib/my-rules.mjs` as pure functions.
+3. Register the hook in `plugin/hooks/hooks.json` under the matching
    lifecycle event.
 4. Add unit tests under `src/tests/` (import the pure rule module).
 

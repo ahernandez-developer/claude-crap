@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>claude-sonar :: dashboard</title>
+    <!--
+      Vue 3.5.13 production global build, vendored under
+      `src/dashboard/public/vendor/`. The plugin deliberately does NOT
+      fetch Vue from a CDN: the dashboard must work offline after
+      `npm install`, the supply chain must be pinned to whatever
+      shipped inside the npm tarball, and the previous CDN reference
+      had no Subresource Integrity attribute (see F-A03-01 in the
+      OWASP scan). Refresh this file by re-running
+      `curl -fsSL https://unpkg.com/vue@3.5.13/dist/vue.global.prod.js
+      -o src/dashboard/public/vendor/vue.global.prod.js` and bumping
+      the version string in the filename if you upgrade Vue.
+    -->
+    <script src="./vendor/vue.global.prod.js"></script>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #0b0d10;
+        --card: #14181d;
+        --border: #232831;
+        --fg: #e7eaef;
+        --muted: #8a93a3;
+        --accent: #3ea6ff;
+        --rating-A: #2ecc71;
+        --rating-B: #9bcc2e;
+        --rating-C: #f1c40f;
+        --rating-D: #e67e22;
+        --rating-E: #e74c3c;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Helvetica, Arial, sans-serif;
+        background: var(--bg);
+        color: var(--fg);
+        min-height: 100vh;
+      }
+      header {
+        padding: 24px 32px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 16px;
+      }
+      header h1 {
+        margin: 0;
+        font-size: 22px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+      }
+      header h1 small {
+        color: var(--muted);
+        font-weight: 400;
+        margin-left: 8px;
+      }
+      header .meta {
+        color: var(--muted);
+        font-size: 13px;
+        font-variant-numeric: tabular-nums;
+      }
+      main {
+        padding: 32px;
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+      .grid {
+        display: grid;
+        gap: 16px;
+      }
+      .grid.summary {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+      @media (max-width: 880px) {
+        .grid.summary {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 20px;
+      }
+      .card h2 {
+        margin: 0 0 4px 0;
+        font-size: 12px;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+      }
+      .rating {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 64px;
+        height: 64px;
+        border-radius: 50%;
+        font-size: 32px;
+        font-weight: 700;
+        color: #0b0d10;
+        margin: 8px 0 12px 0;
+      }
+      .rating-A { background: var(--rating-A); }
+      .rating-B { background: var(--rating-B); }
+      .rating-C { background: var(--rating-C); }
+      .rating-D { background: var(--rating-D); }
+      .rating-E { background: var(--rating-E); }
+      .card .detail {
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+      }
+      table th,
+      table td {
+        text-align: left;
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--border);
+      }
+      table th {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+        font-weight: 500;
+      }
+      table tr:last-child td {
+        border-bottom: none;
+      }
+      .pill {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      .pill-error { background: rgba(231, 76, 60, 0.2); color: #ff7062; }
+      .pill-warning { background: rgba(241, 196, 15, 0.2); color: #f1c40f; }
+      .pill-note { background: rgba(62, 166, 255, 0.2); color: var(--accent); }
+      .empty {
+        padding: 24px;
+        text-align: center;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .section-title {
+        font-size: 13px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+        margin: 32px 0 12px 0;
+      }
+      .verdict {
+        display: inline-block;
+        font-size: 12px;
+        font-weight: 600;
+        padding: 4px 10px;
+        border-radius: 6px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      .verdict.passes { background: rgba(46, 204, 113, 0.18); color: var(--rating-A); }
+      .verdict.fails { background: rgba(231, 76, 60, 0.18); color: var(--rating-E); }
+      a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+      pre {
+        background: var(--bg);
+        padding: 12px;
+        border-radius: 6px;
+        font-size: 12px;
+        overflow-x: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <header>
+        <h1>
+          claude-sonar
+          <small>local quality dashboard</small>
+        </h1>
+        <div class="meta" v-if="score">
+          <span>{{ score.loc.physical }} LOC · {{ score.loc.files }} files</span>
+          &nbsp;·&nbsp;
+          <span>refreshed {{ formatTimestamp(score.generatedAt) }}</span>
+        </div>
+      </header>
+
+      <main>
+        <div v-if="loading" class="empty">Loading project score…</div>
+        <div v-else-if="error" class="empty">
+          Failed to load score: <code>{{ error }}</code>
+        </div>
+        <template v-else-if="score">
+          <!-- Top summary cards -->
+          <div class="grid summary">
+            <div class="card">
+              <h2>Overall</h2>
+              <div :class="['rating', 'rating-' + score.overall.rating]">{{ score.overall.rating }}</div>
+              <div class="detail">
+                <span :class="['verdict', score.overall.passes ? 'passes' : 'fails']">
+                  {{ score.overall.passes ? 'Passes policy' : 'Fails policy' }}
+                </span>
+                <br />
+                Policy ceiling: <strong>{{ score.overall.policyRating }}</strong>
+              </div>
+            </div>
+            <div class="card">
+              <h2>Maintainability</h2>
+              <div :class="['rating', 'rating-' + score.maintainability.rating]">{{ score.maintainability.rating }}</div>
+              <div class="detail">
+                TDR <strong>{{ score.maintainability.tdrPercent }}%</strong><br />
+                {{ score.maintainability.remediationMinutes }} min remediation
+              </div>
+            </div>
+            <div class="card">
+              <h2>Reliability</h2>
+              <div :class="['rating', 'rating-' + score.reliability.rating]">{{ score.reliability.rating }}</div>
+              <div class="detail">
+                {{ score.reliability.errorFindings }} error · {{ score.reliability.warningFindings }} warning · {{ score.reliability.noteFindings }} note
+              </div>
+            </div>
+            <div class="card">
+              <h2>Security</h2>
+              <div :class="['rating', 'rating-' + score.security.rating]">{{ score.security.rating }}</div>
+              <div class="detail">
+                {{ score.security.errorFindings }} error · {{ score.security.warningFindings }} warning · {{ score.security.noteFindings }} note
+              </div>
+            </div>
+          </div>
+
+          <!-- Findings by tool -->
+          <div class="section-title">Findings by tool</div>
+          <div class="card">
+            <table v-if="toolEntries.length">
+              <thead>
+                <tr>
+                  <th>Tool</th>
+                  <th style="text-align: right">Findings</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="[tool, count] in toolEntries" :key="tool">
+                  <td>{{ tool }}</td>
+                  <td style="text-align: right">{{ count }}</td>
+                </tr>
+              </tbody>
+            </table>
+            <div v-else class="empty">No scanners have ingested findings yet.</div>
+          </div>
+
+          <!-- Findings by file (top 10 hot spots) -->
+          <div class="section-title">Top 10 hottest files</div>
+          <div class="card">
+            <table v-if="fileEntries.length">
+              <thead>
+                <tr>
+                  <th>File</th>
+                  <th style="text-align: right">Findings</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="[file, count] in fileEntries" :key="file">
+                  <td><code>{{ file }}</code></td>
+                  <td style="text-align: right">{{ count }}</td>
+                </tr>
+              </tbody>
+            </table>
+            <div v-else class="empty">No findings in the consolidated SARIF report yet.</div>
+          </div>
+
+          <!-- Where to drill in -->
+          <div class="section-title">Reports</div>
+          <div class="card">
+            <p style="margin: 0 0 8px 0">
+              <strong>SARIF document:</strong>
+              <a href="/api/sarif" target="_blank">/api/sarif</a>
+            </p>
+            <p style="margin: 0 0 8px 0">
+              <strong>Score JSON:</strong>
+              <a href="/api/score" target="_blank">/api/score</a>
+            </p>
+            <p style="margin: 0; color: var(--muted); font-size: 12px">
+              Local file: <code>{{ score.location.sarifReportPath }}</code>
+            </p>
+          </div>
+        </template>
+      </main>
+    </div>
+
+    <script>
+      const { createApp, ref, computed, onMounted } = Vue;
+
+      createApp({
+        setup() {
+          const score = ref(null);
+          const loading = ref(true);
+          const error = ref(null);
+
+          const toolEntries = computed(() => {
+            if (!score.value) return [];
+            return Object.entries(score.value.findings.byTool).sort((a, b) => b[1] - a[1]);
+          });
+
+          const fileEntries = computed(() => {
+            if (!score.value) return [];
+            return Object.entries(score.value.findings.byFile)
+              .sort((a, b) => b[1] - a[1])
+              .slice(0, 10);
+          });
+
+          function formatTimestamp(iso) {
+            try {
+              return new Date(iso).toLocaleString();
+            } catch {
+              return iso;
+            }
+          }
+
+          async function refresh() {
+            loading.value = true;
+            error.value = null;
+            try {
+              const res = await fetch("/api/score");
+              if (!res.ok) throw new Error("HTTP " + res.status);
+              score.value = await res.json();
+            } catch (err) {
+              error.value = err.message || String(err);
+            } finally {
+              loading.value = false;
+            }
+          }
+
+          onMounted(() => {
+            refresh();
+            // Poll every 10s so the dashboard stays roughly in sync
+            // with new ingestions without requiring a manual reload.
+            setInterval(refresh, 10_000);
+          });
+
+          return { score, loading, error, toolEntries, fileEntries, formatTimestamp };
+        },
+      }).mount("#app");
+    </script>
+  </body>
+</html>

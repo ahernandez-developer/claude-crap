@@ -109,14 +109,14 @@ async function checkNodeVersion() {
 async function checkPluginStructure(pluginRoot) {
   const required = [
     "package.json",
-    ".claude-plugin/plugin.json",
-    ".mcp.json",
-    "CLAUDE.md",
-    "hooks/hooks.json",
-    "hooks/pre-tool-use.mjs",
-    "hooks/post-tool-use.mjs",
-    "hooks/stop-quality-gate.mjs",
-    "hooks/session-start.mjs",
+    "plugin/.claude-plugin/plugin.json",
+    "plugin/.mcp.json",
+    "plugin/CLAUDE.md",
+    "plugin/hooks/hooks.json",
+    "plugin/hooks/pre-tool-use.mjs",
+    "plugin/hooks/post-tool-use.mjs",
+    "plugin/hooks/stop-quality-gate.mjs",
+    "plugin/hooks/session-start.mjs",
   ];
   const missing = [];
   for (const rel of required) {
@@ -141,23 +141,42 @@ async function checkPluginStructure(pluginRoot) {
  * @returns {Promise<import("./lib/cli-ui.mjs").StepResult>}
  */
 async function checkDist(pluginRoot) {
-  const entry = join(pluginRoot, "dist", "index.js");
+  const npmEntry = join(pluginRoot, "dist", "index.js");
+  const gitEntry = join(pluginRoot, "plugin", "bundle", "mcp-server.mjs");
+  
+  let npmOk = false;
+  let gitOk = false;
+  let npmAge, gitAge;
+
   try {
-    const stat = await fs.stat(entry);
-    const ageMs = Date.now() - stat.mtimeMs;
-    const ageHours = Math.round(ageMs / (1000 * 60 * 60));
-    return {
-      status: "ok",
-      label: `dist/index.js is built`,
-      detail: `${entry} (modified ~${ageHours}h ago)`,
-    };
-  } catch {
+    const stat = await fs.stat(npmEntry);
+    npmAge = Math.round((Date.now() - stat.mtimeMs) / (1000 * 60 * 60));
+    npmOk = true;
+  } catch {}
+
+  try {
+    const stat = await fs.stat(gitEntry);
+    gitAge = Math.round((Date.now() - stat.mtimeMs) / (1000 * 60 * 60));
+    gitOk = true;
+  } catch {}
+
+  const details = [];
+  if (npmOk) details.push(`dist/index.js (~${npmAge}h)`);
+  if (gitOk) details.push(`plugin/bundle/mcp-server.mjs (~${gitAge}h)`);
+
+  if (!npmOk && !gitOk) {
     return {
       status: "fail",
-      label: `dist/index.js is built`,
-      detail: `Run \`npm run build\` from ${pluginRoot}`,
+      label: `Server entrypoints built`,
+      detail: `Both dist/ and plugin/bundle/ are missing. Run \`npm run build && npm run build:plugin\`.`
     };
   }
+
+  return {
+    status: npmOk && gitOk ? "ok" : "warn",
+    label: `Server entrypoints built`,
+    detail: details.join(", ") + (!npmOk || !gitOk ? " (one is missing)" : "")
+  };
 }
 
 /**
@@ -168,7 +187,7 @@ async function checkHooksExecutable(pluginRoot) {
   const hooks = ["pre-tool-use.mjs", "post-tool-use.mjs", "stop-quality-gate.mjs", "session-start.mjs"];
   const notExec = [];
   for (const name of hooks) {
-    const full = join(pluginRoot, "hooks", name);
+    const full = join(pluginRoot, "plugin", "hooks", name);
     try {
       await fs.access(full, fsConstants.X_OK);
     } catch {

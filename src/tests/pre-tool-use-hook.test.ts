@@ -29,7 +29,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const HOOK_PATH = resolve(HERE, "..", "..", "hooks", "pre-tool-use.mjs");
+const HOOK_PATH = resolve(HERE, "..", "..", "plugin", "hooks", "pre-tool-use.mjs");
 
 interface HookResult {
   readonly code: number;

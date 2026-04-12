@@ -3,11 +3,15 @@
  * npm `postinstall` hook for the claude-sonar package.
  *
  * Runs automatically after every `npm install` (or
- * `npx @sr-herz/claude-sonar install` of the package). Its only job
- * is to make sure `dist/` exists
+ * `npx @sr-herz/claude-sonar install` of the package). Its job is to
+ * ensure both build surfaces exist:
+ *
+ *   - `dist/`                      — npm library distribution (tsc)
+ *   - `plugin/bundle/mcp-server.mjs` — git plugin distribution (esbuild)
+ *
  * so the MCP server, the hooks, and the dashboard can all start
- * without a pre-build step from the user. We intentionally keep this
- * tiny — heavier validation belongs in `doctor`.
+ * without a manual build step from the user. We intentionally keep
+ * this tiny — heavier validation belongs in `doctor`.
  *
  * Behavior:
  *
@@ -48,6 +52,7 @@ const PLUGIN_ROOT = resolve(HERE, "..");
 async function distIsBuilt() {
   try {
     await fs.access(join(PLUGIN_ROOT, "dist", "index.js"));
+    await fs.access(join(PLUGIN_ROOT, "plugin", "bundle", "mcp-server.mjs"));
     return true;
   } catch {
     return false;
@@ -68,7 +73,16 @@ function runBuild() {
       [join(PLUGIN_ROOT, "node_modules", "typescript", "bin", "tsc"), "-p", "tsconfig.json"],
       { cwd: PLUGIN_ROOT, stdio: ["ignore", "inherit", "inherit"] },
     );
-    child.on("exit", (code) => resolvePromise(code ?? 1));
+    child.on("exit", (code) => {
+      if (code !== 0) return resolvePromise(code ?? 1);
+      const bundler = spawn(
+        process.execPath,
+        [join(PLUGIN_ROOT, "scripts", "bundle-plugin.mjs")],
+        { cwd: PLUGIN_ROOT, stdio: ["ignore", "inherit", "inherit"] }
+      );
+      bundler.on("exit", (bc) => resolvePromise(bc ?? 1));
+      bundler.on("error", () => resolvePromise(1));
+    });
     child.on("error", () => resolvePromise(1));
   });
 }
@@ -94,12 +108,12 @@ async function main() {
     return;
   }
 
-  process.stderr.write("claude-sonar: building dist/ ...\n");
+  process.stderr.write("claude-sonar: building entrypoints ...\n");
   const code = await runBuild();
   if (code !== 0) {
     process.stderr.write(
-      `claude-sonar: ! build failed (tsc exit ${code}). ` +
-        `Run \`npm run build\` from ${PLUGIN_ROOT} to see the full error.\n`,
+      `claude-sonar: ! build failed (exit ${code}). ` +
+        `Run \`npm run build && npm run build:plugin\` from ${PLUGIN_ROOT} to see the full error.\n`,
     );
     return;
   }
