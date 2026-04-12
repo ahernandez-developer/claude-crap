@@ -25,7 +25,6 @@
  */
 
 import { promises as fs, existsSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
-import { createServer as createTcpServer } from "node:net";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
