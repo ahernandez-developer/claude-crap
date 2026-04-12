@@ -1,8 +1,9 @@
 // scripts/bundle-plugin.mjs
 import { build } from "esbuild";
-import { cp, mkdir, rm } from "node:fs/promises";
+import { cp, mkdir, readdir, rm, stat } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
-import { resolve } from "node:path";
+import { homedir } from "node:os";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(fileURLToPath(import.meta.url), "../..");
@@ -95,6 +96,56 @@ async function main() {
     process.stderr.write(
       `warning: could not generate plugin/package-lock.json: ${err.message}\n`,
     );
+  }
+  // 6. Sync to plugin cache — if Claude Code has cached a previous
+  //    version of this plugin, update it in-place so the next session
+  //    picks up the new build without a manual `/plugin install`.
+  //    This is the developer fast path: `npm run build:plugin` is all
+  //    you need after editing source. Normal users who install from
+  //    the marketplace never hit this code.
+  await syncToPluginCache(resolve(ROOT, "plugin"));
+}
+
+/**
+ * Find every claude-crap version directory under the Claude Code
+ * plugin cache and copy the freshly built plugin files into each one.
+ * Skips `node_modules/` and `.claude-crap/` (runtime state that
+ * belongs to the installed copy, not the source).
+ */
+async function syncToPluginCache(pluginDir) {
+  const cacheBase = join(homedir(), ".claude", "plugins", "cache", "herz", "claude-crap");
+
+  let versionDirs;
+  try {
+    versionDirs = await readdir(cacheBase);
+  } catch {
+    // No cache exists — nothing to sync (first install hasn't happened).
+    return;
+  }
+
+  for (const version of versionDirs) {
+    const cacheDir = join(cacheBase, version);
+    const s = await stat(cacheDir).catch(() => null);
+    if (!s?.isDirectory()) continue;
+
+    try {
+      // Copy every plugin file/directory EXCEPT node_modules and .claude-crap
+      const entries = await readdir(pluginDir);
+      for (const entry of entries) {
+        if (entry === "node_modules" || entry === ".claude-crap") continue;
+        const src = join(pluginDir, entry);
+        const dst = join(cacheDir, entry);
+        const srcStat = await stat(src);
+        if (srcStat.isDirectory()) {
+          await cp(src, dst, { recursive: true, force: true });
+        } else {
+          await cp(src, dst, { force: true });
+        }
+      }
+      process.stderr.write(`  ✓ synced plugin cache: ${cacheDir}\n`);
+    } catch (err) {
+      process.stderr.write(`  ⚠ cache sync failed for ${cacheDir}: ${err.message}\n`);
+    }
   }
 }
 
