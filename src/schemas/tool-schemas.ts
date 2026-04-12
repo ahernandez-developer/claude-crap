@@ -199,6 +199,19 @@ export const ingestScannerOutputSchema = {
  * from an external scanner, deduplicates against the internal store, and
  * normalizes the output into claude-crap's canonical format.
  */
+/**
+ * Schema for the `auto_scan` tool. Auto-detects available scanners
+ * in the workspace, runs them, and ingests findings into the SARIF store.
+ */
+export const autoScanSchema = {
+  type: "object",
+  description:
+    "Auto-detect available scanners (ESLint, Semgrep, Bandit, Stryker) in the workspace, execute them, and ingest findings into the SARIF store. Returns detection results, per-scanner execution stats, and total findings ingested. Call this to populate findings without manual scanner invocation.",
+  properties: {},
+  required: [],
+  additionalProperties: false,
+} as const;
+
 export const ingestSarifSchema = {
   type: "object",
   description:

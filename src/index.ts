@@ -57,7 +57,9 @@ import { validateSarifDocument } from "./sarif/sarif-validator.js";
 import { loadCrapConfig, CrapConfigError } from "./crap-config.js";
 import { findTestFile } from "./tools/test-harness.js";
 import { resolveWithinWorkspace } from "./workspace-guard.js";
+import { autoScan } from "./scanner/auto-scan.js";
 import {
+  autoScanSchema,
   computeCrapSchema,
   computeTdrSchema,
   analyzeFileAstSchema,
@@ -204,6 +206,12 @@ async function main(): Promise<void> {
         description:
           "Aggregate the project score across Maintainability, Reliability, Security and Overall, returning a chat-friendly Markdown summary, the structured JSON, the local dashboard URL, and the consolidated SARIF report path.",
         inputSchema: scoreProjectSchema,
+      },
+      {
+        name: "auto_scan",
+        description:
+          "Auto-detect available scanners (ESLint, Semgrep, Bandit, Stryker) in the workspace, run them, and ingest findings into the SARIF store.",
+        inputSchema: autoScanSchema,
       },
     ],
   }));
@@ -532,6 +540,35 @@ async function main(): Promise<void> {
         }
       }
 
+      case "auto_scan": {
+        logger.info({ tool: "auto_scan" }, "Tool call received");
+        try {
+          const result = await autoScan(config.pluginRoot, sarifStore, logger);
+          const markdown = renderAutoScanMarkdown(result);
+          return {
+            content: [
+              { type: "text", text: markdown },
+              { type: "text", text: JSON.stringify(result, null, 2) },
+            ],
+          };
+        } catch (err) {
+          logger.error({ err }, "auto_scan failed");
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify(
+                  { tool: "auto_scan", status: "error", message: (err as Error).message },
+                  null,
+                  2,
+                ),
+              },
+            ],
+            isError: true,
+          };
+        }
+      }
+
       default:
         throw new Error(`[claude-crap] Unknown tool: ${name}`);
     }
@@ -589,6 +626,67 @@ async function main(): Promise<void> {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   logger.info("claude-crap MCP server ready (stdio)");
+
+  // Fire-and-forget: auto-scan runs in background, doesn't block tool calls.
+  // If the agent calls score_project before scanning finishes, it gets
+  // whatever is in the SARIF store so far. The next call after completion
+  // reflects all findings.
+  autoScan(config.pluginRoot, sarifStore, logger)
+    .then((result) => {
+      const scanners = result.results
+        .filter((r) => r.success)
+        .map((r) => r.scanner);
+      logger.info(
+        {
+          scannersRun: scanners,
+          totalFindings: result.totalFindings,
+          durationMs: result.totalDurationMs,
+        },
+        "auto-scan completed",
+      );
+    })
+    .catch((err) => {
+      logger.warn(
+        { err: (err as Error).message },
+        "auto-scan failed — continuing without it",
+      );
+    });
+}
+
+/**
+ * Render a human-readable Markdown summary of an auto-scan result.
+ */
+function renderAutoScanMarkdown(result: import("./scanner/auto-scan.js").AutoScanResult): string {
+  const lines: string[] = ["## claude-crap :: auto-scan results\n"];
+
+  // Detection summary
+  lines.push("### Detected scanners\n");
+  lines.push("| Scanner | Available | Reason |");
+  lines.push("| ------- | :-------: | ------ |");
+  for (const d of result.detected) {
+    lines.push(`| ${d.scanner} | ${d.available ? "yes" : "no"} | ${d.reason} |`);
+  }
+  lines.push("");
+
+  // Execution results
+  if (result.results.length > 0) {
+    lines.push("### Execution results\n");
+    lines.push("| Scanner | Status | Findings | Duration |");
+    lines.push("| ------- | :----: | :------: | -------: |");
+    for (const r of result.results) {
+      const status = r.success ? "ok" : "failed";
+      const duration = `${(r.durationMs / 1000).toFixed(1)}s`;
+      lines.push(`| ${r.scanner} | ${status} | ${r.findingsIngested} | ${duration} |`);
+    }
+    lines.push("");
+  }
+
+  // Summary
+  lines.push(
+    `**Total findings ingested:** ${result.totalFindings} in ${(result.totalDurationMs / 1000).toFixed(1)}s`,
+  );
+
+  return lines.join("\n");
 }
 
 /**

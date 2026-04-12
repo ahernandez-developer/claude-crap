@@ -83,6 +83,25 @@ task close — no further setup required.
 > - **npm** — `npx claude-crap install` (direct, works anywhere `npx` does)
 > - **Claude Code marketplace** — `/plugin marketplace add https://github.com/ahernandez-developer/claude-crap` followed by `/plugin install claude-crap@herz`. Claude Code resolves the marketplace entry's `source` to `claude-crap@0.1.0` on the npm registry, so both routes unpack the **same tarball** and get the same SHA.
 
+### Marketplace cache troubleshooting
+
+The Claude Code desktop app caches plugin metadata from the
+marketplace. If you didn't see the plugin in desktop app while installing, run these
+steps in order:
+
+```bash
+# 1. Force the marketplace to re-fetch metadata for the publisher
+claude plugin marketplace update herz
+
+# 2. Reinstall the plugin under the current name
+claude plugin install claude-crap
+```
+
+Then **restart the Claude Code desktop app** to clear the in-memory
+cache. This is expected behavior whenever a plugin is renamed or its
+metadata changes — the marketplace does not auto-invalidate cached
+listings.
+
 ---
 
 ## Configuration
@@ -99,11 +118,11 @@ PreToolUse security gatekeeper (blocked paths, destructive Bash,
 hardcoded secrets) is **always** strict regardless of this setting —
 security is not a quality gradient.
 
-| Mode         | Stop hook exit | Verdict sink | Agent experience                                                                                                                                                |
-| :----------- | :------------: | :----------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `strict`     |       `2`      | **stderr**   | The full `BLOCKED` box is injected into the agent's context. The task cannot close until the rules are satisfied. **Default — nothing to configure.**          |
-| `warn`       |       `0`      | **stdout**   | The full `WARNING` box lands in the hook transcript so the agent still sees every failing rule, but the task is allowed to close. Agent can remediate voluntarily. |
-| `advisory`   |       `0`      | **stdout**   | A single-line `ADVISORY` note is emitted. Minimal pressure on the agent — the task closes with a soft nudge only.                                              |
+| Mode       | Stop hook exit | Verdict sink | Agent experience                                                                                                                                                   |
+| :--------- | :------------: | :----------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `strict`   |      `2`       | **stderr**   | The full `BLOCKED` box is injected into the agent's context. The task cannot close until the rules are satisfied. **Default — nothing to configure.**              |
+| `warn`     |      `0`       | **stdout**   | The full `WARNING` box lands in the hook transcript so the agent still sees every failing rule, but the task is allowed to close. Agent can remediate voluntarily. |
+| `advisory` |      `0`       | **stdout**   | A single-line `ADVISORY` note is emitted. Minimal pressure on the agent — the task closes with a soft nudge only.                                                  |
 
 ### How to override the default
 
@@ -114,7 +133,7 @@ default back with a single file at the workspace root:
 // .claude-crap.json — commit this to git for team-wide policy
 {
   "$schema": "https://raw.githubusercontent.com/ahernandez-developer/claude-crap/main/schemas/crap-config.json",
-  "strictness": "warn"  // "strict" | "warn" | "advisory"
+  "strictness": "warn", // "strict" | "warn" | "advisory"
 }
 ```
 
@@ -312,7 +331,7 @@ behind each component.
 
 ## MCP Tools
 
-The MCP server exposes seven deterministic tools and two resources.
+The MCP server exposes eight deterministic tools and two resources.
 Every tool has a strict JSON Schema (Draft-07) with
 `additionalProperties: false`, `enum`, `pattern`, and numeric bounds,
 so any drift from the contract produces a deterministic error the
@@ -333,22 +352,23 @@ platform is designed to be used:
 
 **Available MCP tools:**
 
-| Tool                    | Purpose                                                                                                                                       | Key inputs                                                                          |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `compute_crap`          | CRAP index for a single function plus a block verdict against the configured threshold.                                                      | `cyclomaticComplexity`, `coveragePercent`, `functionName`, `filePath`               |
-| `compute_tdr`           | Technical Debt Ratio and A..E maintainability rating for a project / module / file scope.                                                    | `remediationMinutes`, `totalLinesOfCode`, `scope`                                   |
-| `analyze_file_ast`      | Tree-sitter AST metrics: physical and logical LOC plus per-function cyclomatic complexity. Supports TypeScript, JavaScript, Python, Java, C#. | `filePath`, `language`                                                              |
-| `ingest_sarif`          | Merge a raw SARIF 2.1.0 document into the store with deduplication. Validated against a minimal AJV schema before persistence.                | `sarifDocument`, `sourceTool`                                                       |
-| `ingest_scanner_output` | Route a scanner's native output through the matching adapter, enrich each finding with an `effortMinutes` estimate, and persist as SARIF.    | `scanner` (`semgrep` / `eslint` / `bandit` / `stryker`), `rawOutput`                |
-| `require_test_harness`  | Check whether a production source file has an accompanying test file in any of the supported conventions.                                    | `filePath`                                                                          |
-| `score_project`         | Aggregate the entire workspace into Maintainability / Reliability / Security / Overall A..E grades with Markdown and JSON output.            | `format` (`markdown` / `json` / `both`)                                             |
+| Tool                    | Purpose                                                                                                                                       | Key inputs                                                            |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `compute_crap`          | CRAP index for a single function plus a block verdict against the configured threshold.                                                       | `cyclomaticComplexity`, `coveragePercent`, `functionName`, `filePath` |
+| `compute_tdr`           | Technical Debt Ratio and A..E maintainability rating for a project / module / file scope.                                                     | `remediationMinutes`, `totalLinesOfCode`, `scope`                     |
+| `analyze_file_ast`      | Tree-sitter AST metrics: physical and logical LOC plus per-function cyclomatic complexity. Supports TypeScript, JavaScript, Python, Java, C#. | `filePath`, `language`                                                |
+| `ingest_sarif`          | Merge a raw SARIF 2.1.0 document into the store with deduplication. Validated against a minimal AJV schema before persistence.                | `sarifDocument`, `sourceTool`                                         |
+| `ingest_scanner_output` | Route a scanner's native output through the matching adapter, enrich each finding with an `effortMinutes` estimate, and persist as SARIF.     | `scanner` (`semgrep` / `eslint` / `bandit` / `stryker`), `rawOutput`  |
+| `require_test_harness`  | Check whether a production source file has an accompanying test file in any of the supported conventions.                                     | `filePath`                                                            |
+| `score_project`         | Aggregate the entire workspace into Maintainability / Reliability / Security / Overall A..E grades with Markdown and JSON output.             | `format` (`markdown` / `json` / `both`)                               |
+| `auto_scan`             | Auto-detect available scanners (ESLint, Semgrep, Bandit, Stryker) in the workspace, run them, and ingest findings into the SARIF store.       | (none — fully automatic)                                              |
 
 **Available MCP resources:**
 
-| URI                            | MIME                     | Description                                                           |
-| ------------------------------ | ------------------------ | --------------------------------------------------------------------- |
-| `sonar://metrics/current`      | `application/json`       | Live CRAP / TDR / rating snapshot derived from the in-memory store.   |
-| `sonar://reports/latest.sarif` | `application/sarif+json` | Last consolidated SARIF document produced by the Stop quality gate.   |
+| URI                            | MIME                     | Description                                                         |
+| ------------------------------ | ------------------------ | ------------------------------------------------------------------- |
+| `sonar://metrics/current`      | `application/json`       | Live CRAP / TDR / rating snapshot derived from the in-memory store. |
+| `sonar://reports/latest.sarif` | `application/sarif+json` | Last consolidated SARIF document produced by the Stop quality gate. |
 
 **Example usage.** From an agent session, the tool call a typical
 pre-publication audit lands on:
@@ -436,7 +456,7 @@ npm run build:watch
 # Run in dev mode (tsx, no build step)
 npm run dev
 
-# Full native test suite — 155 tests across 27 suites
+# Full native test suite — 208 tests across 35 suites
 npm test
 
 # Narrow the feedback loop to one domain while iterating
@@ -527,7 +547,7 @@ and paste the bundle as the issue body.
    PreToolUse hook will block you if you try. Add a characterization
    test that pins the current behavior, then the attack test that
    demonstrates the bug, then the patch.
-3. **Run `npm test`.** The full suite must stay at 177 / 177 green.
+3. **Run `npm test`.** The full suite must stay at 208 / 208 green.
    If you add new tests, update the count in the
    [Development](#development) section and in `CHANGELOG.md`.
 4. **Update the `CHANGELOG.md`** with an entry describing your
@@ -535,7 +555,7 @@ and paste the bundle as the issue body.
    and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 5. **Open a pull request** describing the change in the rigid
    deduction format from `CLAUDE.md` (`Coupled dependency / Risk /
-   Required test / Blocking metric / Proposed change`). CI will run
+Required test / Blocking metric / Proposed change`). CI will run
    typecheck, the full test suite, and `npm audit` on every push.
 
 Full dev loop, test layout, coding conventions, and the release
