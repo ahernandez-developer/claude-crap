@@ -3585,49 +3585,49 @@ var require_fast_uri = __commonJS({
       schemelessOptions.skipEscape = true;
       return serialize(resolved, schemelessOptions);
     }
-    function resolveComponent(base, relative2, options, skipNormalization) {
+    function resolveComponent(base, relative3, options, skipNormalization) {
       const target = {};
       if (!skipNormalization) {
         base = parse(serialize(base, options), options);
-        relative2 = parse(serialize(relative2, options), options);
+        relative3 = parse(serialize(relative3, options), options);
       }
       options = options || {};
-      if (!options.tolerant && relative2.scheme) {
-        target.scheme = relative2.scheme;
-        target.userinfo = relative2.userinfo;
-        target.host = relative2.host;
-        target.port = relative2.port;
-        target.path = removeDotSegments(relative2.path || "");
-        target.query = relative2.query;
+      if (!options.tolerant && relative3.scheme) {
+        target.scheme = relative3.scheme;
+        target.userinfo = relative3.userinfo;
+        target.host = relative3.host;
+        target.port = relative3.port;
+        target.path = removeDotSegments(relative3.path || "");
+        target.query = relative3.query;
       } else {
-        if (relative2.userinfo !== void 0 || relative2.host !== void 0 || relative2.port !== void 0) {
-          target.userinfo = relative2.userinfo;
-          target.host = relative2.host;
-          target.port = relative2.port;
-          target.path = removeDotSegments(relative2.path || "");
-          target.query = relative2.query;
+        if (relative3.userinfo !== void 0 || relative3.host !== void 0 || relative3.port !== void 0) {
+          target.userinfo = relative3.userinfo;
+          target.host = relative3.host;
+          target.port = relative3.port;
+          target.path = removeDotSegments(relative3.path || "");
+          target.query = relative3.query;
         } else {
-          if (!relative2.path) {
+          if (!relative3.path) {
             target.path = base.path;
-            if (relative2.query !== void 0) {
-              target.query = relative2.query;
+            if (relative3.query !== void 0) {
+              target.query = relative3.query;
             } else {
               target.query = base.query;
             }
           } else {
-            if (relative2.path[0] === "/") {
-              target.path = removeDotSegments(relative2.path);
+            if (relative3.path[0] === "/") {
+              target.path = removeDotSegments(relative3.path);
             } else {
               if ((base.userinfo !== void 0 || base.host !== void 0 || base.port !== void 0) && !base.path) {
-                target.path = "/" + relative2.path;
+                target.path = "/" + relative3.path;
               } else if (!base.path) {
-                target.path = relative2.path;
+                target.path = relative3.path;
               } else {
-                target.path = base.path.slice(0, base.path.lastIndexOf("/") + 1) + relative2.path;
+                target.path = base.path.slice(0, base.path.lastIndexOf("/") + 1) + relative3.path;
               }
               target.path = removeDotSegments(target.path);
             }
-            target.query = relative2.query;
+            target.query = relative3.query;
           }
           target.userinfo = base.userinfo;
           target.host = base.host;
@@ -3635,7 +3635,7 @@ var require_fast_uri = __commonJS({
         }
         target.scheme = base.scheme;
       }
-      target.fragment = relative2.fragment;
+      target.fragment = relative3.fragment;
       return target;
     }
     function equal(uriA, uriB, options) {
@@ -7041,6 +7041,15 @@ var LANGUAGE_TABLE = {
   python: PYTHON,
   java: JAVA
 };
+function detectLanguageFromPath(filePath) {
+  const lower = filePath.toLowerCase();
+  for (const config of Object.values(LANGUAGE_TABLE)) {
+    for (const ext of config.extensions) {
+      if (lower.endsWith(ext)) return config.id;
+    }
+  }
+  return null;
+}
 
 // src/ast/tree-sitter-engine.ts
 var TreeSitterEngine = class {
@@ -7235,8 +7244,8 @@ function loadConfig() {
 }
 
 // src/dashboard/server.ts
-import { promises as fs2, existsSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
-import { dirname as dirname2, join as join2, resolve as resolve2 } from "node:path";
+import { promises as fs3, existsSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
+import { dirname as dirname2, join as join2, resolve as resolve3 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
@@ -7403,6 +7412,105 @@ function renderProjectScoreMarkdown(score) {
   ].join("\n");
 }
 
+// src/dashboard/file-detail.ts
+import { promises as fs2 } from "node:fs";
+
+// src/workspace-guard.ts
+import { isAbsolute, resolve as resolve2, sep } from "node:path";
+function resolveWithinWorkspace(workspaceRoot, filePath) {
+  const workspace = resolve2(workspaceRoot);
+  const candidate = isAbsolute(filePath) ? resolve2(filePath) : resolve2(workspace, filePath);
+  if (candidate !== workspace && !candidate.startsWith(workspace + sep)) {
+    throw new Error(
+      `[claude-crap] Refusing to access '${filePath}' \u2014 path escapes the workspace root`
+    );
+  }
+  return candidate;
+}
+
+// src/dashboard/file-detail.ts
+async function buildFileDetail(input) {
+  const { relativePath, workspaceRoot, astEngine, sarifStore, cyclomaticMax } = input;
+  const absolutePath = resolveWithinWorkspace(workspaceRoot, relativePath);
+  const source = await fs2.readFile(absolutePath, "utf8");
+  const sourceLines = source.split(/\r?\n/);
+  if (sourceLines.length > 0 && sourceLines[sourceLines.length - 1] === "") {
+    sourceLines.pop();
+  }
+  const physicalLoc = sourceLines.length;
+  let logicalLoc = 0;
+  for (const line of sourceLines) {
+    if (line.trim().length > 0) logicalLoc += 1;
+  }
+  const language = detectLanguageFromPath(relativePath);
+  let functions = [];
+  if (language && astEngine) {
+    try {
+      const metrics = await astEngine.analyzeFile({
+        filePath: absolutePath,
+        language
+      });
+      functions = metrics.functions.map((fn) => ({
+        name: fn.name,
+        startLine: fn.startLine,
+        endLine: fn.endLine,
+        cyclomaticComplexity: fn.cyclomaticComplexity,
+        lineCount: fn.lineCount
+      }));
+    } catch {
+    }
+  }
+  const allFindings = sarifStore.list();
+  const fileFindings = allFindings.filter(
+    (f) => f.location.uri === relativePath
+  );
+  const findings = fileFindings.map((f) => ({
+    ruleId: f.ruleId,
+    level: f.level,
+    message: f.message,
+    sourceTool: f.sourceTool,
+    startLine: f.location.startLine,
+    startColumn: f.location.startColumn,
+    endLine: f.location.endLine ?? f.location.startLine,
+    endColumn: f.location.endColumn ?? 0,
+    effortMinutes: typeof f.properties?.effortMinutes === "number" ? f.properties.effortMinutes : 0
+  }));
+  let errorCount = 0;
+  let warningCount = 0;
+  let noteCount = 0;
+  let totalEffortMinutes = 0;
+  for (const f of findings) {
+    if (f.level === "error") errorCount += 1;
+    else if (f.level === "warning") warningCount += 1;
+    else if (f.level === "note") noteCount += 1;
+    totalEffortMinutes += f.effortMinutes;
+  }
+  const complexities = functions.map((f) => f.cyclomaticComplexity);
+  const maxComplexity = complexities.length > 0 ? Math.max(...complexities) : 0;
+  const avgComplexity = complexities.length > 0 ? Math.round(
+    complexities.reduce((a, b) => a + b, 0) / complexities.length * 100
+  ) / 100 : 0;
+  return {
+    filePath: relativePath,
+    language,
+    physicalLoc,
+    logicalLoc,
+    cyclomaticMax,
+    sourceLines,
+    functions,
+    findings,
+    summary: {
+      totalFindings: findings.length,
+      errorCount,
+      warningCount,
+      noteCount,
+      totalEffortMinutes,
+      avgComplexity,
+      maxComplexity
+    }
+  };
+}
+
 // src/dashboard/server.ts
 async function startDashboard(options) {
   const { config, sarifStore, workspaceStatsProvider, logger: logger2 } = options;
@@ -7423,6 +7531,38 @@ async function startDashboard(options) {
     return score;
   });
   fastify.get("/api/sarif", async () => sarifStore.toSarifDocument());
+  fastify.get("/api/complexity", async () => {
+    if (!options.astEngine) {
+      return { threshold: config.cyclomaticMax, totalFunctions: 0, violationCount: 0, topFunctions: [] };
+    }
+    return buildComplexityReport(config, options.astEngine, logger2);
+  });
+  fastify.get("/api/file-detail", async (request, reply) => {
+    const { path: filePath } = request.query;
+    if (!filePath) {
+      return reply.status(400).send({ error: "Missing required query parameter: path" });
+    }
+    try {
+      const detail = await buildFileDetail({
+        relativePath: filePath,
+        workspaceRoot: config.pluginRoot,
+        astEngine: options.astEngine,
+        sarifStore,
+        cyclomaticMax: config.cyclomaticMax
+      });
+      return detail;
+    } catch (err) {
+      const msg = err.message;
+      if (msg.includes("ENOENT") || msg.includes("not found")) {
+        return reply.status(404).send({ error: `File not found: ${filePath}` });
+      }
+      if (msg.includes("escapes the workspace")) {
+        return reply.status(400).send({ error: msg });
+      }
+      logger2.error({ err: msg, filePath }, "file-detail endpoint error");
+      return reply.status(500).send({ error: "Internal server error" });
+    }
+  });
   fastify.get("/", async (_request, reply) => {
     return reply.sendFile("index.html");
   });
@@ -7444,19 +7584,19 @@ async function resolvePublicRoot(logger2) {
   const here = dirname2(fileURLToPath2(import.meta.url));
   const candidates = [
     // 0. Bundled layout: plugin/bundle/mcp-server.mjs → ./dashboard/public
-    resolve2(here, "dashboard", "public"),
+    resolve3(here, "dashboard", "public"),
     // 1. Compiled layout: dist/dashboard/server.js → ./public next to it
     //    (only present if a build step copies the assets — not used
     //    today, but accepted so a future copy step does not break us).
-    resolve2(here, "public"),
+    resolve3(here, "public"),
     // 2. Source-relative layout: dist/dashboard/server.js → ../../src/dashboard/public
     //    This is the default — no copy step required because we resolve
     //    upward from `dist/` into `src/` at runtime.
-    resolve2(here, "..", "..", "src", "dashboard", "public")
+    resolve3(here, "..", "..", "src", "dashboard", "public")
   ];
   for (const candidate of candidates) {
     try {
-      await fs2.access(resolve2(candidate, "index.html"));
+      await fs3.access(resolve3(candidate, "index.html"));
       return candidate;
     } catch {
     }
@@ -7541,6 +7681,73 @@ async function killStaleDashboard(pidFilePath, port, logger2) {
   removePidFile(pidFilePath);
   await new Promise((r) => setTimeout(r, 300));
 }
+var SKIP_DIRS = /* @__PURE__ */ new Set([
+  "node_modules",
+  ".git",
+  "dist",
+  "build",
+  "out",
+  "target",
+  ".venv",
+  "venv",
+  "__pycache__",
+  ".cache",
+  ".next",
+  ".nuxt",
+  ".claude-crap",
+  ".codesight"
+]);
+async function buildComplexityReport(config, engine, logger2) {
+  const threshold = config.cyclomaticMax;
+  const allFunctions = [];
+  let totalFunctions = 0;
+  async function walk2(dir) {
+    let entries;
+    try {
+      entries = await fs3.readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (entry.name.startsWith(".") && entry.name !== ".claude-plugin") continue;
+      const full = join2(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (SKIP_DIRS.has(entry.name)) continue;
+        await walk2(full);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      const language = detectLanguageFromPath(entry.name);
+      if (!language) continue;
+      try {
+        const metrics = await engine.analyzeFile({ filePath: full, language });
+        for (const fn of metrics.functions) {
+          totalFunctions += 1;
+          allFunctions.push({
+            filePath: full.startsWith(config.pluginRoot) ? full.substring(config.pluginRoot.length + 1) : full,
+            name: fn.name,
+            cyclomaticComplexity: fn.cyclomaticComplexity,
+            startLine: fn.startLine,
+            endLine: fn.endLine,
+            lineCount: fn.lineCount
+          });
+        }
+      } catch (err) {
+        logger2.warn(
+          { filePath: full, err: err.message },
+          "complexity-report: failed to analyze file"
+        );
+      }
+    }
+  }
+  await walk2(config.pluginRoot);
+  allFunctions.sort((a, b) => b.cyclomaticComplexity - a.cyclomaticComplexity);
+  const topFunctions = allFunctions.slice(0, 20);
+  const violationCount = allFunctions.filter(
+    (f) => f.cyclomaticComplexity > threshold
+  ).length;
+  return { threshold, totalFunctions, violationCount, topFunctions };
+}
 async function buildScore(config, sarifStore, workspace, dashboardUrl) {
   return computeProjectScore({
     workspaceRoot: config.pluginRoot,
@@ -7583,9 +7790,9 @@ function computeCrap(input, threshold) {
 }
 
 // src/metrics/workspace-walker.ts
-import { promises as fs3 } from "node:fs";
+import { promises as fs4 } from "node:fs";
 import { join as join3 } from "node:path";
-var SKIP_DIRS = /* @__PURE__ */ new Set([
+var SKIP_DIRS2 = /* @__PURE__ */ new Set([
   "node_modules",
   ".git",
   "dist",
@@ -7632,7 +7839,7 @@ async function estimateWorkspaceLoc(workspaceRoot) {
     if (truncated) return;
     let entries;
     try {
-      entries = await fs3.readdir(dir, { withFileTypes: true });
+      entries = await fs4.readdir(dir, { withFileTypes: true });
     } catch {
       return;
     }
@@ -7641,7 +7848,7 @@ async function estimateWorkspaceLoc(workspaceRoot) {
       if (entry.name.startsWith(".") && entry.name !== ".claude-plugin") continue;
       const full = join3(dir, entry.name);
       if (entry.isDirectory()) {
-        if (SKIP_DIRS.has(entry.name)) continue;
+        if (SKIP_DIRS2.has(entry.name)) continue;
         await walk2(full);
         continue;
       }
@@ -7657,7 +7864,7 @@ async function estimateWorkspaceLoc(workspaceRoot) {
         return;
       }
       try {
-        const content = await fs3.readFile(full, "utf8");
+        const content = await fs4.readFile(full, "utf8");
         if (content.length > 0) {
           const lines = content.split(/\r?\n/).length;
           physicalLoc += content.endsWith("\n") ? lines - 1 : lines;
@@ -7671,8 +7878,8 @@ async function estimateWorkspaceLoc(workspaceRoot) {
 }
 
 // src/sarif/sarif-store.ts
-import { promises as fs4 } from "node:fs";
-import { dirname as dirname3, isAbsolute, join as join4, resolve as resolve3 } from "node:path";
+import { promises as fs5 } from "node:fs";
+import { dirname as dirname3, isAbsolute as isAbsolute2, join as join4, resolve as resolve4 } from "node:path";
 
 // src/sarif/sarif-builder.ts
 function buildSarifDocument(tool, findings) {
@@ -7734,7 +7941,7 @@ var SarifStore = class {
   /** Tool invocations we have already ingested, for telemetry. */
   toolInvocations = 0;
   constructor(options) {
-    const dir = isAbsolute(options.outputDir) ? options.outputDir : resolve3(options.workspaceRoot, options.outputDir);
+    const dir = isAbsolute2(options.outputDir) ? options.outputDir : resolve4(options.workspaceRoot, options.outputDir);
     this.filePath = join4(dir, options.fileName ?? "latest.sarif");
   }
   /**
@@ -7759,7 +7966,7 @@ var SarifStore = class {
    */
   async loadLatest() {
     try {
-      const raw = await fs4.readFile(this.filePath, "utf8");
+      const raw = await fs5.readFile(this.filePath, "utf8");
       const parsed = JSON.parse(raw);
       if (parsed.version !== "2.1.0") {
         throw new Error(`Expected SARIF 2.1.0, got ${parsed.version}`);
@@ -7861,10 +8068,10 @@ var SarifStore = class {
    */
   async persist() {
     const doc = this.toSarifDocument();
-    await fs4.mkdir(dirname3(this.filePath), { recursive: true });
+    await fs5.mkdir(dirname3(this.filePath), { recursive: true });
     const tmp = `${this.filePath}.${process.pid}.tmp`;
-    await fs4.writeFile(tmp, JSON.stringify(doc, null, 2), "utf8");
-    await fs4.rename(tmp, this.filePath);
+    await fs5.writeFile(tmp, JSON.stringify(doc, null, 2), "utf8");
+    await fs5.rename(tmp, this.filePath);
   }
   /**
    * Build the current consolidated SARIF document from the in-memory
@@ -8080,22 +8287,22 @@ function isStrictness(value) {
 }
 
 // src/tools/test-harness.ts
-import { promises as fs5 } from "node:fs";
-import { basename, dirname as dirname4, extname, isAbsolute as isAbsolute2, join as join6, relative, resolve as resolve4, sep } from "node:path";
+import { promises as fs6 } from "node:fs";
+import { basename, dirname as dirname4, extname, isAbsolute as isAbsolute3, join as join6, relative, resolve as resolve5, sep as sep2 } from "node:path";
 var TEST_SUFFIX_PATTERN = /\.(test|spec)\./;
 function isTestFile(filePath) {
   const base = basename(filePath);
   if (TEST_SUFFIX_PATTERN.test(base)) return true;
   if (base.startsWith("test_") && base.endsWith(".py")) return true;
-  const parts = filePath.split(sep);
+  const parts = filePath.split(sep2);
   return parts.includes("__tests__") || parts.includes("tests") || parts.includes("test");
 }
 function candidatePaths(workspaceRoot, filePath) {
-  const absSource = resolve4(filePath);
+  const absSource = resolve5(filePath);
   const ext = extname(absSource);
   const base = basename(absSource, ext);
   const dir = dirname4(absSource);
-  const absWorkspace = resolve4(workspaceRoot);
+  const absWorkspace = resolve5(workspaceRoot);
   const relFromRoot = relative(absWorkspace, absSource);
   const relDir = dirname4(relFromRoot);
   const candidates = /* @__PURE__ */ new Set();
@@ -8128,14 +8335,14 @@ function candidatePaths(workspaceRoot, filePath) {
   return Array.from(candidates);
 }
 async function findTestFile(workspaceRoot, filePath) {
-  const absolute = isAbsolute2(filePath) ? filePath : resolve4(workspaceRoot, filePath);
+  const absolute = isAbsolute3(filePath) ? filePath : resolve5(workspaceRoot, filePath);
   if (isTestFile(absolute)) {
     return { testFile: absolute, candidates: [absolute], isTestFile: true };
   }
   const candidates = candidatePaths(workspaceRoot, absolute);
   for (const candidate of candidates) {
     try {
-      await fs5.access(candidate);
+      await fs6.access(candidate);
       return { testFile: candidate, candidates, isTestFile: false };
     } catch {
     }
@@ -8143,22 +8350,9 @@ async function findTestFile(workspaceRoot, filePath) {
   return { testFile: null, candidates, isTestFile: false };
 }
 
-// src/workspace-guard.ts
-import { isAbsolute as isAbsolute3, resolve as resolve5, sep as sep2 } from "node:path";
-function resolveWithinWorkspace(workspaceRoot, filePath) {
-  const workspace = resolve5(workspaceRoot);
-  const candidate = isAbsolute3(filePath) ? resolve5(filePath) : resolve5(workspace, filePath);
-  if (candidate !== workspace && !candidate.startsWith(workspace + sep2)) {
-    throw new Error(
-      `[claude-crap] Refusing to access '${filePath}' \u2014 path escapes the workspace root`
-    );
-  }
-  return candidate;
-}
-
 // src/scanner/auto-scan.ts
 import { existsSync as existsSync5 } from "node:fs";
-import { join as join10 } from "node:path";
+import { join as join11 } from "node:path";
 
 // src/scanner/detector.ts
 import { existsSync as existsSync2, readFileSync as readFileSync3 } from "node:fs";
@@ -8700,6 +8894,135 @@ function buildResult(projectType, steps, autoScanResult, recommendation) {
   };
 }
 
+// src/scanner/complexity-scanner.ts
+import { promises as fs7 } from "node:fs";
+import { join as join10, relative as relative2 } from "node:path";
+var SKIP_DIRS3 = /* @__PURE__ */ new Set([
+  "node_modules",
+  ".git",
+  "dist",
+  "build",
+  "out",
+  "target",
+  ".venv",
+  "venv",
+  "__pycache__",
+  ".cache",
+  ".next",
+  ".nuxt",
+  ".claude-crap",
+  ".codesight"
+]);
+var MAX_FILES = 2e4;
+var RULE_ID = "complexity/cyclomatic-max";
+var SOURCE_TOOL = "complexity";
+async function scanComplexity(workspaceRoot, engine, sarifStore, config, logger2) {
+  const start = Date.now();
+  const threshold = config.cyclomaticMax;
+  const errorThreshold = threshold * 2;
+  const files = await collectSourceFiles(workspaceRoot);
+  logger2.info(
+    { fileCount: files.length, threshold },
+    "complexity-scanner: starting analysis"
+  );
+  const sarifResults = [];
+  let filesScanned = 0;
+  let functionsAnalyzed = 0;
+  let violations = 0;
+  for (const filePath of files) {
+    const language = detectLanguageFromPath(filePath);
+    if (!language) continue;
+    try {
+      const metrics = await engine.analyzeFile({ filePath, language });
+      filesScanned += 1;
+      functionsAnalyzed += metrics.functions.length;
+      for (const fn of metrics.functions) {
+        if (fn.cyclomaticComplexity <= threshold) continue;
+        const level = fn.cyclomaticComplexity >= errorThreshold ? "error" : "warning";
+        const relPath = relative2(workspaceRoot, filePath);
+        sarifResults.push({
+          ruleId: RULE_ID,
+          level,
+          message: {
+            text: `Function '${fn.name}' has cyclomatic complexity ${fn.cyclomaticComplexity} (threshold: ${threshold})`
+          },
+          locations: [
+            {
+              physicalLocation: {
+                artifactLocation: { uri: relPath },
+                region: {
+                  startLine: fn.startLine,
+                  startColumn: 1,
+                  endLine: fn.endLine,
+                  endColumn: 1
+                }
+              }
+            }
+          ],
+          properties: {
+            sourceTool: SOURCE_TOOL,
+            effortMinutes: estimateEffortMinutes(level),
+            cyclomaticComplexity: fn.cyclomaticComplexity
+          }
+        });
+        violations += 1;
+      }
+    } catch (err) {
+      logger2.warn(
+        { filePath, err: err.message },
+        "complexity-scanner: failed to analyze file, skipping"
+      );
+    }
+  }
+  if (sarifResults.length > 0) {
+    const document = wrapResultsInSarif(
+      SOURCE_TOOL,
+      "0.1.0",
+      sarifResults
+    );
+    sarifStore.ingestRun(document, SOURCE_TOOL);
+    await sarifStore.persist();
+  }
+  const durationMs = Date.now() - start;
+  logger2.info(
+    { filesScanned, functionsAnalyzed, violations, durationMs },
+    "complexity-scanner: analysis complete"
+  );
+  return { filesScanned, functionsAnalyzed, violations, durationMs };
+}
+async function collectSourceFiles(workspaceRoot) {
+  const files = [];
+  let truncated = false;
+  async function walk2(dir) {
+    if (truncated) return;
+    let entries;
+    try {
+      entries = await fs7.readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (truncated) return;
+      if (entry.name.startsWith(".") && entry.name !== ".claude-plugin") continue;
+      const full = join10(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (SKIP_DIRS3.has(entry.name)) continue;
+        await walk2(full);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      if (!detectLanguageFromPath(entry.name)) continue;
+      files.push(full);
+      if (files.length >= MAX_FILES) {
+        truncated = true;
+        return;
+      }
+    }
+  }
+  await walk2(workspaceRoot);
+  return files;
+}
+
 // src/scanner/auto-scan.ts
 function ingestScannerRun(scanner, rawOutput, sarifStore) {
   let parsed;
@@ -8712,7 +9035,7 @@ function ingestScannerRun(scanner, rawOutput, sarifStore) {
   const stats = sarifStore.ingestRun(adapted.document, adapted.sourceTool);
   return { accepted: stats.accepted };
 }
-async function autoScan(workspaceRoot, sarifStore, logger2) {
+async function autoScan(workspaceRoot, sarifStore, logger2, options) {
   const start = Date.now();
   const detected = await detectScanners(workspaceRoot);
   const available = detected.filter((d) => d.available);
@@ -8737,7 +9060,7 @@ async function autoScan(workspaceRoot, sarifStore, logger2) {
     ".eslintrc.json"
   ];
   const eslintDetected = available.some((d) => d.scanner === "eslint");
-  const hasEslintConfig = eslintConfigFiles.some((f) => existsSync5(join10(workspaceRoot, f)));
+  const hasEslintConfig = eslintConfigFiles.some((f) => existsSync5(join11(workspaceRoot, f)));
   if (eslintDetected && !hasEslintConfig) {
     logger2.info("auto-scan: ESLint detected but no config \u2014 running bootstrap");
     try {
@@ -8847,11 +9170,30 @@ async function autoScan(workspaceRoot, sarifStore, logger2) {
   if (persistNeeded) {
     await sarifStore.persist();
   }
+  let complexityScan;
+  if (options?.engine) {
+    try {
+      complexityScan = await scanComplexity(
+        workspaceRoot,
+        options.engine,
+        sarifStore,
+        { cyclomaticMax: options.cyclomaticMax ?? 15 },
+        logger2
+      );
+      totalFindings += complexityScan.violations;
+    } catch (err) {
+      logger2.warn(
+        { err: err.message },
+        "auto-scan: complexity scanner failed \u2014 continuing without it"
+      );
+    }
+  }
   return {
     detected,
     results,
     totalFindings,
-    totalDurationMs: Date.now() - start
+    totalDurationMs: Date.now() - start,
+    ...complexityScan ? { complexityScan } : {}
   };
 }
 
@@ -9047,7 +9389,8 @@ async function main() {
       config,
       sarifStore,
       workspaceStatsProvider: () => estimateWorkspaceLoc(config.pluginRoot),
-      logger
+      logger,
+      astEngine
     });
   } catch (err) {
     logger.warn(
@@ -9438,7 +9781,10 @@ async function main() {
       case "auto_scan": {
         logger.info({ tool: "auto_scan" }, "Tool call received");
         try {
-          const result = await autoScan(config.pluginRoot, sarifStore, logger);
+          const result = await autoScan(config.pluginRoot, sarifStore, logger, {
+            engine: astEngine,
+            cyclomaticMax: config.cyclomaticMax
+          });
           const markdown = renderAutoScanMarkdown(result);
           return {
             content: [
@@ -9514,7 +9860,10 @@ async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   logger.info("claude-crap MCP server ready (stdio)");
-  autoScan(config.pluginRoot, sarifStore, logger).then((result) => {
+  autoScan(config.pluginRoot, sarifStore, logger, {
+    engine: astEngine,
+    cyclomaticMax: config.cyclomaticMax
+  }).then((result) => {
     const scanners = result.results.filter((r) => r.success).map((r) => r.scanner);
     logger.info(
       {
@@ -9579,6 +9928,15 @@ function renderAutoScanMarkdown(result) {
       const duration = `${(r.durationMs / 1e3).toFixed(1)}s`;
       lines.push(`| ${r.scanner} | ${status} | ${r.findingsIngested} | ${duration} |`);
     }
+    lines.push("");
+  }
+  if (result.complexityScan) {
+    const cs = result.complexityScan;
+    lines.push("### Cyclomatic complexity scan\n");
+    lines.push(`- Files scanned: **${cs.filesScanned}**`);
+    lines.push(`- Functions analyzed: **${cs.functionsAnalyzed}**`);
+    lines.push(`- Violations: **${cs.violations}**`);
+    lines.push(`- Duration: ${(cs.durationMs / 1e3).toFixed(1)}s`);
     lines.push("");
   }
   lines.push(
