@@ -8083,6 +8083,377 @@ function resolveWithinWorkspace(workspaceRoot, filePath) {
   return candidate;
 }
 
+// src/scanner/detector.ts
+import { existsSync, readFileSync as readFileSync2 } from "node:fs";
+import { join as join6 } from "node:path";
+import { execFile } from "node:child_process";
+var SCANNER_SIGNALS = {
+  eslint: {
+    configFiles: [
+      "eslint.config.js",
+      "eslint.config.mjs",
+      "eslint.config.cjs",
+      "eslint.config.ts",
+      "eslint.config.mts",
+      "eslint.config.cts",
+      ".eslintrc.js",
+      ".eslintrc.cjs",
+      ".eslintrc.yaml",
+      ".eslintrc.yml",
+      ".eslintrc.json"
+    ],
+    packageJsonKeys: ["eslint"],
+    binaryNames: ["eslint"]
+  },
+  semgrep: {
+    configFiles: [
+      ".semgrep.yml",
+      ".semgrep.yaml",
+      ".semgrep.json"
+    ],
+    packageJsonKeys: [],
+    binaryNames: ["semgrep"]
+  },
+  bandit: {
+    configFiles: [
+      ".bandit",
+      "bandit.yaml",
+      "bandit.yml"
+    ],
+    packageJsonKeys: [],
+    binaryNames: ["bandit"]
+  },
+  stryker: {
+    configFiles: [
+      "stryker.conf.js",
+      "stryker.conf.mjs",
+      "stryker.conf.cjs",
+      "stryker.conf.json",
+      ".strykerrc",
+      ".strykerrc.json"
+    ],
+    packageJsonKeys: ["@stryker-mutator/core"],
+    binaryNames: ["stryker"]
+  }
+};
+function probeConfigFiles(workspaceRoot, scanner) {
+  const signals = SCANNER_SIGNALS[scanner];
+  for (const file of signals.configFiles) {
+    const fullPath = join6(workspaceRoot, file);
+    if (existsSync(fullPath)) {
+      return { found: true, path: fullPath };
+    }
+  }
+  return { found: false };
+}
+function probePackageJson(workspaceRoot, scanner) {
+  const signals = SCANNER_SIGNALS[scanner];
+  if (signals.packageJsonKeys.length === 0) return false;
+  const pkgPath = join6(workspaceRoot, "package.json");
+  if (!existsSync(pkgPath)) return false;
+  try {
+    const raw = readFileSync2(pkgPath, "utf-8");
+    const pkg = JSON.parse(raw);
+    const deps = {
+      ...typeof pkg.dependencies === "object" && pkg.dependencies !== null ? pkg.dependencies : {},
+      ...typeof pkg.devDependencies === "object" && pkg.devDependencies !== null ? pkg.devDependencies : {}
+    };
+    return signals.packageJsonKeys.some((key) => key in deps);
+  } catch {
+    return false;
+  }
+}
+function probeBinary(binaryName) {
+  return new Promise((resolve6) => {
+    execFile("which", [binaryName], { timeout: 5e3 }, (err) => {
+      resolve6(err === null);
+    });
+  });
+}
+async function detectScanners(workspaceRoot) {
+  const scanners = ["eslint", "semgrep", "bandit", "stryker"];
+  const results = await Promise.all(
+    scanners.map(async (scanner) => {
+      const configProbe = probeConfigFiles(workspaceRoot, scanner);
+      if (configProbe.found && configProbe.path) {
+        return {
+          scanner,
+          available: true,
+          reason: `config file found: ${configProbe.path.replace(workspaceRoot + "/", "")}`,
+          configPath: configProbe.path
+        };
+      }
+      if (probePackageJson(workspaceRoot, scanner)) {
+        return {
+          scanner,
+          available: true,
+          reason: `found in package.json dependencies`
+        };
+      }
+      const signals = SCANNER_SIGNALS[scanner];
+      for (const bin of signals.binaryNames) {
+        if (await probeBinary(bin)) {
+          return {
+            scanner,
+            available: true,
+            reason: `binary "${bin}" found on PATH`
+          };
+        }
+      }
+      return {
+        scanner,
+        available: false,
+        reason: "no config file, package.json entry, or binary found"
+      };
+    })
+  );
+  return results;
+}
+
+// src/scanner/runner.ts
+import { execFile as execFile2 } from "node:child_process";
+import { readFileSync as readFileSync3, existsSync as existsSync2 } from "node:fs";
+import { join as join7 } from "node:path";
+function getScannerCommand(scanner, workspaceRoot) {
+  switch (scanner) {
+    case "eslint":
+      return {
+        command: "npx",
+        args: ["eslint", "-f", "json", "."],
+        timeoutMs: 12e4,
+        nonZeroIsNormal: true
+      };
+    case "semgrep":
+      return {
+        command: "semgrep",
+        args: ["--sarif", "--quiet", "."],
+        timeoutMs: 12e4,
+        nonZeroIsNormal: false
+      };
+    case "bandit":
+      return {
+        command: "bandit",
+        args: ["-f", "json", "-r", ".", "-q"],
+        timeoutMs: 12e4,
+        nonZeroIsNormal: true
+      };
+    case "stryker":
+      return {
+        command: "npx",
+        args: ["stryker", "run"],
+        timeoutMs: 3e5,
+        nonZeroIsNormal: false,
+        outputFile: join7(workspaceRoot, "reports", "mutation", "mutation.json")
+      };
+  }
+}
+function runScanner(scanner, workspaceRoot) {
+  const start = Date.now();
+  const cmd = getScannerCommand(scanner, workspaceRoot);
+  return new Promise((resolve6) => {
+    execFile2(
+      cmd.command,
+      cmd.args,
+      {
+        cwd: workspaceRoot,
+        timeout: cmd.timeoutMs,
+        maxBuffer: 50 * 1024 * 1024,
+        // 50 MB — large codebases produce verbose output
+        env: { ...process.env, FORCE_COLOR: "0" }
+        // suppress ANSI in output
+      },
+      (err, stdout, stderr) => {
+        const durationMs = Date.now() - start;
+        if (err && !cmd.nonZeroIsNormal) {
+          if (cmd.outputFile && existsSync2(cmd.outputFile)) {
+            try {
+              const fileOutput = readFileSync3(cmd.outputFile, "utf-8");
+              resolve6({
+                scanner,
+                success: true,
+                rawOutput: fileOutput,
+                durationMs
+              });
+              return;
+            } catch {
+            }
+          }
+          resolve6({
+            scanner,
+            success: false,
+            rawOutput: "",
+            error: stderr || err.message,
+            durationMs
+          });
+          return;
+        }
+        if (cmd.outputFile) {
+          if (existsSync2(cmd.outputFile)) {
+            try {
+              const fileOutput = readFileSync3(cmd.outputFile, "utf-8");
+              resolve6({
+                scanner,
+                success: true,
+                rawOutput: fileOutput,
+                durationMs
+              });
+              return;
+            } catch (readErr) {
+              resolve6({
+                scanner,
+                success: false,
+                rawOutput: "",
+                error: `Failed to read output file: ${readErr.message}`,
+                durationMs
+              });
+              return;
+            }
+          }
+          resolve6({
+            scanner,
+            success: false,
+            rawOutput: "",
+            error: `Scanner completed but output file not found: ${cmd.outputFile}`,
+            durationMs
+          });
+          return;
+        }
+        const output = stdout.trim();
+        if (!output) {
+          resolve6({
+            scanner,
+            success: true,
+            rawOutput: "[]",
+            // ESLint returns empty when no files match
+            durationMs
+          });
+          return;
+        }
+        resolve6({
+          scanner,
+          success: true,
+          rawOutput: output,
+          durationMs
+        });
+      }
+    );
+  });
+}
+
+// src/scanner/auto-scan.ts
+function ingestScannerRun(scanner, rawOutput, sarifStore) {
+  let parsed;
+  try {
+    parsed = JSON.parse(rawOutput);
+  } catch {
+    parsed = rawOutput;
+  }
+  const adapted = adaptScannerOutput(scanner, parsed);
+  const stats = sarifStore.ingestRun(adapted.document, adapted.sourceTool);
+  return { accepted: stats.accepted };
+}
+async function autoScan(workspaceRoot, sarifStore, logger2) {
+  const start = Date.now();
+  const detected = await detectScanners(workspaceRoot);
+  const available = detected.filter((d) => d.available);
+  logger2.info(
+    {
+      detected: detected.map((d) => `${d.scanner}:${d.available}`),
+      available: available.length
+    },
+    "auto-scan: detection complete"
+  );
+  if (available.length === 0) {
+    return {
+      detected,
+      results: [],
+      totalFindings: 0,
+      totalDurationMs: Date.now() - start
+    };
+  }
+  const runResults = await Promise.allSettled(
+    available.map((d) => runScanner(d.scanner, workspaceRoot))
+  );
+  const results = [];
+  let totalFindings = 0;
+  let persistNeeded = false;
+  for (let i = 0; i < available.length; i++) {
+    const detection = available[i];
+    const settled = runResults[i];
+    if (settled.status === "rejected") {
+      const error = String(settled.reason);
+      logger2.warn(
+        { scanner: detection.scanner, error },
+        "auto-scan: scanner execution rejected"
+      );
+      results.push({
+        scanner: detection.scanner,
+        success: false,
+        findingsIngested: 0,
+        durationMs: 0,
+        error
+      });
+      continue;
+    }
+    const runResult = settled.value;
+    if (!runResult.success) {
+      logger2.warn(
+        { scanner: runResult.scanner, error: runResult.error },
+        "auto-scan: scanner returned failure"
+      );
+      results.push({
+        scanner: runResult.scanner,
+        success: false,
+        findingsIngested: 0,
+        durationMs: runResult.durationMs,
+        error: runResult.error ?? "unknown error"
+      });
+      continue;
+    }
+    try {
+      const { accepted } = ingestScannerRun(
+        runResult.scanner,
+        runResult.rawOutput,
+        sarifStore
+      );
+      totalFindings += accepted;
+      persistNeeded = true;
+      logger2.info(
+        { scanner: runResult.scanner, accepted, durationMs: runResult.durationMs },
+        "auto-scan: scanner ingested"
+      );
+      results.push({
+        scanner: runResult.scanner,
+        success: true,
+        findingsIngested: accepted,
+        durationMs: runResult.durationMs
+      });
+    } catch (err) {
+      const error = err.message;
+      logger2.warn(
+        { scanner: runResult.scanner, error },
+        "auto-scan: adapter/ingestion failed"
+      );
+      results.push({
+        scanner: runResult.scanner,
+        success: false,
+        findingsIngested: 0,
+        durationMs: runResult.durationMs,
+        error
+      });
+    }
+  }
+  if (persistNeeded) {
+    await sarifStore.persist();
+  }
+  return {
+    detected,
+    results,
+    totalFindings,
+    totalDurationMs: Date.now() - start
+  };
+}
+
 // src/schemas/tool-schemas.ts
 var computeCrapSchema = {
   type: "object",
@@ -8210,6 +8581,13 @@ var ingestScannerOutputSchema = {
   required: ["scanner", "rawOutput"],
   additionalProperties: false
 };
+var autoScanSchema = {
+  type: "object",
+  description: "Auto-detect available scanners (ESLint, Semgrep, Bandit, Stryker) in the workspace, execute them, and ingest findings into the SARIF store. Returns detection results, per-scanner execution stats, and total findings ingested. Call this to populate findings without manual scanner invocation.",
+  properties: {},
+  required: [],
+  additionalProperties: false
+};
 var ingestSarifSchema = {
   type: "object",
   description: "Ingest a raw SARIF 2.1.0 report produced by an external scanner (Semgrep, ESLint, Bandit, Stryker, etc.), deduplicate it against the internal store, and return the normalized document. The agent should call this once per scanner invocation, not once per finding.",
@@ -8329,6 +8707,11 @@ async function main() {
         name: "score_project",
         description: "Aggregate the project score across Maintainability, Reliability, Security and Overall, returning a chat-friendly Markdown summary, the structured JSON, the local dashboard URL, and the consolidated SARIF report path.",
         inputSchema: scoreProjectSchema
+      },
+      {
+        name: "auto_scan",
+        description: "Auto-detect available scanners (ESLint, Semgrep, Bandit, Stryker) in the workspace, run them, and ingest findings into the SARIF store.",
+        inputSchema: autoScanSchema
       }
     ]
   }));
@@ -8610,6 +8993,34 @@ async function main() {
           };
         }
       }
+      case "auto_scan": {
+        logger.info({ tool: "auto_scan" }, "Tool call received");
+        try {
+          const result = await autoScan(config.pluginRoot, sarifStore, logger);
+          const markdown = renderAutoScanMarkdown(result);
+          return {
+            content: [
+              { type: "text", text: markdown },
+              { type: "text", text: JSON.stringify(result, null, 2) }
+            ]
+          };
+        } catch (err) {
+          logger.error({ err }, "auto_scan failed");
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify(
+                  { tool: "auto_scan", status: "error", message: err.message },
+                  null,
+                  2
+                )
+              }
+            ],
+            isError: true
+          };
+        }
+      }
       default:
         throw new Error(`[claude-crap] Unknown tool: ${name}`);
     }
@@ -8661,6 +9072,47 @@ async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   logger.info("claude-crap MCP server ready (stdio)");
+  autoScan(config.pluginRoot, sarifStore, logger).then((result) => {
+    const scanners = result.results.filter((r) => r.success).map((r) => r.scanner);
+    logger.info(
+      {
+        scannersRun: scanners,
+        totalFindings: result.totalFindings,
+        durationMs: result.totalDurationMs
+      },
+      "auto-scan completed"
+    );
+  }).catch((err) => {
+    logger.warn(
+      { err: err.message },
+      "auto-scan failed \u2014 continuing without it"
+    );
+  });
+}
+function renderAutoScanMarkdown(result) {
+  const lines = ["## claude-crap :: auto-scan results\n"];
+  lines.push("### Detected scanners\n");
+  lines.push("| Scanner | Available | Reason |");
+  lines.push("| ------- | :-------: | ------ |");
+  for (const d of result.detected) {
+    lines.push(`| ${d.scanner} | ${d.available ? "yes" : "no"} | ${d.reason} |`);
+  }
+  lines.push("");
+  if (result.results.length > 0) {
+    lines.push("### Execution results\n");
+    lines.push("| Scanner | Status | Findings | Duration |");
+    lines.push("| ------- | :----: | :------: | -------: |");
+    for (const r of result.results) {
+      const status = r.success ? "ok" : "failed";
+      const duration = `${(r.durationMs / 1e3).toFixed(1)}s`;
+      lines.push(`| ${r.scanner} | ${status} | ${r.findingsIngested} | ${duration} |`);
+    }
+    lines.push("");
+  }
+  lines.push(
+    `**Total findings ingested:** ${result.totalFindings} in ${(result.totalDurationMs / 1e3).toFixed(1)}s`
+  );
+  return lines.join("\n");
 }
 function safeLoadStrictness(workspaceRoot, logger2) {
   try {
