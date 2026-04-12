@@ -60,9 +60,9 @@ register the plugin:
   1. Native Claude Code install from this directory:
        /plugin install /.../claude-sonar
 
-  2. Marketplace install (if the plugin is published to GitHub):
-       /plugin marketplace add ahernandez-developer/claude-sonar
-       /plugin install claude-sonar
+  2. Marketplace install (Claude Code pulls the published npm tarball):
+       /plugin marketplace add https://github.com/ahernandez-developer/claude-sonar
+       /plugin install claude-sonar@herz
 ```
 
 Once Claude Code reports the plugin as active, open any new session
@@ -72,11 +72,10 @@ local dashboard URL. From that point on the PreToolUse gatekeeper
 runs on every tool call and the Stop quality gate runs on every
 task close — no further setup required.
 
-> **Note.** Right now the only distribution channel is npm via
-> `npx @sr-herz/claude-sonar install`. Once the plugin is tagged on GitHub the
-> Claude Code marketplace path (`/plugin marketplace add
-> ahernandez-developer/claude-sonar`) becomes a fully native second
-> install route.
+> **Two install channels are live:**
+>
+> - **npm** — `npx @sr-herz/claude-sonar install` (direct, works anywhere `npx` does)
+> - **Claude Code marketplace** — `/plugin marketplace add https://github.com/ahernandez-developer/claude-sonar` followed by `/plugin install claude-sonar@herz`. Claude Code resolves the marketplace entry's `source` to `@sr-herz/claude-sonar@0.1.0` on the npm registry, so both routes unpack the **same tarball** and get the same SHA.
 
 ---
 
