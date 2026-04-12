@@ -8340,120 +8340,6 @@ function runScanner(scanner, workspaceRoot) {
   });
 }
 
-// src/scanner/auto-scan.ts
-function ingestScannerRun(scanner, rawOutput, sarifStore) {
-  let parsed;
-  try {
-    parsed = JSON.parse(rawOutput);
-  } catch {
-    parsed = rawOutput;
-  }
-  const adapted = adaptScannerOutput(scanner, parsed);
-  const stats = sarifStore.ingestRun(adapted.document, adapted.sourceTool);
-  return { accepted: stats.accepted };
-}
-async function autoScan(workspaceRoot, sarifStore, logger2) {
-  const start = Date.now();
-  const detected = await detectScanners(workspaceRoot);
-  const available = detected.filter((d) => d.available);
-  logger2.info(
-    {
-      detected: detected.map((d) => `${d.scanner}:${d.available}`),
-      available: available.length
-    },
-    "auto-scan: detection complete"
-  );
-  if (available.length === 0) {
-    return {
-      detected,
-      results: [],
-      totalFindings: 0,
-      totalDurationMs: Date.now() - start
-    };
-  }
-  const runResults = await Promise.allSettled(
-    available.map((d) => runScanner(d.scanner, workspaceRoot))
-  );
-  const results = [];
-  let totalFindings = 0;
-  let persistNeeded = false;
-  for (let i = 0; i < available.length; i++) {
-    const detection = available[i];
-    const settled = runResults[i];
-    if (settled.status === "rejected") {
-      const error = String(settled.reason);
-      logger2.warn(
-        { scanner: detection.scanner, error },
-        "auto-scan: scanner execution rejected"
-      );
-      results.push({
-        scanner: detection.scanner,
-        success: false,
-        findingsIngested: 0,
-        durationMs: 0,
-        error
-      });
-      continue;
-    }
-    const runResult = settled.value;
-    if (!runResult.success) {
-      logger2.warn(
-        { scanner: runResult.scanner, error: runResult.error },
-        "auto-scan: scanner returned failure"
-      );
-      results.push({
-        scanner: runResult.scanner,
-        success: false,
-        findingsIngested: 0,
-        durationMs: runResult.durationMs,
-        error: runResult.error ?? "unknown error"
-      });
-      continue;
-    }
-    try {
-      const { accepted } = ingestScannerRun(
-        runResult.scanner,
-        runResult.rawOutput,
-        sarifStore
-      );
-      totalFindings += accepted;
-      persistNeeded = true;
-      logger2.info(
-        { scanner: runResult.scanner, accepted, durationMs: runResult.durationMs },
-        "auto-scan: scanner ingested"
-      );
-      results.push({
-        scanner: runResult.scanner,
-        success: true,
-        findingsIngested: accepted,
-        durationMs: runResult.durationMs
-      });
-    } catch (err) {
-      const error = err.message;
-      logger2.warn(
-        { scanner: runResult.scanner, error },
-        "auto-scan: adapter/ingestion failed"
-      );
-      results.push({
-        scanner: runResult.scanner,
-        success: false,
-        findingsIngested: 0,
-        durationMs: runResult.durationMs,
-        error
-      });
-    }
-  }
-  if (persistNeeded) {
-    await sarifStore.persist();
-  }
-  return {
-    detected,
-    results,
-    totalFindings,
-    totalDurationMs: Date.now() - start
-  };
-}
-
 // src/scanner/bootstrap.ts
 import { existsSync as existsSync3, writeFileSync, readdirSync } from "node:fs";
 import { join as join8 } from "node:path";
@@ -8632,11 +8518,55 @@ async function bootstrapScanner(workspaceRoot, sarifStore, logger2) {
   let autoScanResult = null;
   if (installSucceeded && recommendation.canAutoInstall) {
     try {
-      autoScanResult = await autoScan(workspaceRoot, sarifStore, logger2);
+      const scanStart = Date.now();
+      const postDetections = await detectScanners(workspaceRoot);
+      const postAvailable = postDetections.filter((d) => d.available);
+      const scanResults = [];
+      let scanFindings = 0;
+      const settled = await Promise.allSettled(
+        postAvailable.map((d) => runScanner(d.scanner, workspaceRoot))
+      );
+      for (let i = 0; i < postAvailable.length; i++) {
+        const det = postAvailable[i];
+        const res = settled[i];
+        if (res.status === "rejected" || !res.value.success) {
+          scanResults.push({
+            scanner: det.scanner,
+            success: false,
+            findingsIngested: 0,
+            durationMs: res.status === "fulfilled" ? res.value.durationMs : 0,
+            error: res.status === "rejected" ? String(res.reason) : res.value.error ?? "unknown error"
+          });
+          continue;
+        }
+        const runResult = res.value;
+        let parsed;
+        try {
+          parsed = JSON.parse(runResult.rawOutput);
+        } catch {
+          parsed = runResult.rawOutput;
+        }
+        const adapted = adaptScannerOutput(runResult.scanner, parsed);
+        const stats = sarifStore.ingestRun(adapted.document, adapted.sourceTool);
+        scanFindings += stats.accepted;
+        scanResults.push({
+          scanner: runResult.scanner,
+          success: true,
+          findingsIngested: stats.accepted,
+          durationMs: runResult.durationMs
+        });
+      }
+      if (scanFindings > 0) await sarifStore.persist();
+      autoScanResult = {
+        detected: postDetections,
+        results: scanResults,
+        totalFindings: scanFindings,
+        totalDurationMs: Date.now() - scanStart
+      };
     } catch (err) {
       logger2.warn(
         { err: err.message },
-        "bootstrap: auto_scan after install failed"
+        "bootstrap: scan after install failed"
       );
     }
   }
@@ -8660,6 +8590,132 @@ async function bootstrapScanner(workspaceRoot, sarifStore, logger2) {
     autoScanResult,
     success: installSucceeded,
     summary
+  };
+}
+
+// src/scanner/auto-scan.ts
+function ingestScannerRun(scanner, rawOutput, sarifStore) {
+  let parsed;
+  try {
+    parsed = JSON.parse(rawOutput);
+  } catch {
+    parsed = rawOutput;
+  }
+  const adapted = adaptScannerOutput(scanner, parsed);
+  const stats = sarifStore.ingestRun(adapted.document, adapted.sourceTool);
+  return { accepted: stats.accepted };
+}
+async function autoScan(workspaceRoot, sarifStore, logger2) {
+  const start = Date.now();
+  const detected = await detectScanners(workspaceRoot);
+  const available = detected.filter((d) => d.available);
+  logger2.info(
+    {
+      detected: detected.map((d) => `${d.scanner}:${d.available}`),
+      available: available.length
+    },
+    "auto-scan: detection complete"
+  );
+  if (available.length === 0) {
+    logger2.info("auto-scan: no scanners found, attempting bootstrap");
+    try {
+      const bootstrapResult = await bootstrapScanner(workspaceRoot, sarifStore, logger2);
+      if (bootstrapResult.autoScanResult) {
+        return bootstrapResult.autoScanResult;
+      }
+    } catch (err) {
+      logger2.warn(
+        { err: err.message },
+        "auto-scan: bootstrap failed \u2014 continuing with empty results"
+      );
+    }
+    return {
+      detected,
+      results: [],
+      totalFindings: 0,
+      totalDurationMs: Date.now() - start
+    };
+  }
+  const runResults = await Promise.allSettled(
+    available.map((d) => runScanner(d.scanner, workspaceRoot))
+  );
+  const results = [];
+  let totalFindings = 0;
+  let persistNeeded = false;
+  for (let i = 0; i < available.length; i++) {
+    const detection = available[i];
+    const settled = runResults[i];
+    if (settled.status === "rejected") {
+      const error = String(settled.reason);
+      logger2.warn(
+        { scanner: detection.scanner, error },
+        "auto-scan: scanner execution rejected"
+      );
+      results.push({
+        scanner: detection.scanner,
+        success: false,
+        findingsIngested: 0,
+        durationMs: 0,
+        error
+      });
+      continue;
+    }
+    const runResult = settled.value;
+    if (!runResult.success) {
+      logger2.warn(
+        { scanner: runResult.scanner, error: runResult.error },
+        "auto-scan: scanner returned failure"
+      );
+      results.push({
+        scanner: runResult.scanner,
+        success: false,
+        findingsIngested: 0,
+        durationMs: runResult.durationMs,
+        error: runResult.error ?? "unknown error"
+      });
+      continue;
+    }
+    try {
+      const { accepted } = ingestScannerRun(
+        runResult.scanner,
+        runResult.rawOutput,
+        sarifStore
+      );
+      totalFindings += accepted;
+      persistNeeded = true;
+      logger2.info(
+        { scanner: runResult.scanner, accepted, durationMs: runResult.durationMs },
+        "auto-scan: scanner ingested"
+      );
+      results.push({
+        scanner: runResult.scanner,
+        success: true,
+        findingsIngested: accepted,
+        durationMs: runResult.durationMs
+      });
+    } catch (err) {
+      const error = err.message;
+      logger2.warn(
+        { scanner: runResult.scanner, error },
+        "auto-scan: adapter/ingestion failed"
+      );
+      results.push({
+        scanner: runResult.scanner,
+        success: false,
+        findingsIngested: 0,
+        durationMs: runResult.durationMs,
+        error
+      });
+    }
+  }
+  if (persistNeeded) {
+    await sarifStore.persist();
+  }
+  return {
+    detected,
+    results,
+    totalFindings,
+    totalDurationMs: Date.now() - start
   };
 }
 

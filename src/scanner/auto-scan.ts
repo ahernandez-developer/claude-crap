@@ -22,6 +22,7 @@
 import type { Logger } from "pino";
 import { detectScanners, type ScannerDetection } from "./detector.js";
 import { runScanner, type ScannerRunResult } from "./runner.js";
+import { bootstrapScanner } from "./bootstrap.js";
 import { adaptScannerOutput, type KnownScanner } from "../adapters/index.js";
 import type { SarifStore } from "../sarif/sarif-store.js";
 
@@ -106,6 +107,20 @@ export async function autoScan(
   );
 
   if (available.length === 0) {
+    // No scanners configured — try to bootstrap one automatically.
+    logger.info("auto-scan: no scanners found, attempting bootstrap");
+    try {
+      const bootstrapResult = await bootstrapScanner(workspaceRoot, sarifStore, logger);
+      if (bootstrapResult.autoScanResult) {
+        return bootstrapResult.autoScanResult;
+      }
+    } catch (err) {
+      logger.warn(
+        { err: (err as Error).message },
+        "auto-scan: bootstrap failed — continuing with empty results",
+      );
+    }
+
     return {
       detected,
       results: [],

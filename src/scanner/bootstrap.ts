@@ -27,8 +27,10 @@ import { join } from "node:path";
 import { execFile } from "node:child_process";
 import type { Logger } from "pino";
 import type { KnownScanner } from "../adapters/common.js";
+import { adaptScannerOutput } from "../adapters/index.js";
 import { detectScanners } from "./detector.js";
-import { autoScan, type AutoScanResult } from "./auto-scan.js";
+import { runScanner } from "./runner.js";
+import type { AutoScanResult, ScannerResult } from "./auto-scan.js";
 import type { SarifStore } from "../sarif/sarif-store.js";
 
 // ── Types ──────────────────────────────────────────────────────────
@@ -341,17 +343,67 @@ export async function bootstrapScanner(
     });
   }
 
-  // 4. Run auto_scan if installation succeeded
+  // 4. Run scanner directly if installation succeeded (inline scan
+  //    to avoid circular dependency — autoScan calls bootstrapScanner)
   const installSucceeded = steps.every((s) => s.success);
   let autoScanResult: AutoScanResult | null = null;
 
   if (installSucceeded && recommendation.canAutoInstall) {
     try {
-      autoScanResult = await autoScan(workspaceRoot, sarifStore, logger);
+      const scanStart = Date.now();
+      const postDetections = await detectScanners(workspaceRoot);
+      const postAvailable = postDetections.filter((d) => d.available);
+      const scanResults: ScannerResult[] = [];
+      let scanFindings = 0;
+
+      const settled = await Promise.allSettled(
+        postAvailable.map((d) => runScanner(d.scanner, workspaceRoot)),
+      );
+
+      for (let i = 0; i < postAvailable.length; i++) {
+        const det = postAvailable[i]!;
+        const res = settled[i]!;
+
+        if (res.status === "rejected" || !res.value.success) {
+          scanResults.push({
+            scanner: det.scanner,
+            success: false,
+            findingsIngested: 0,
+            durationMs: res.status === "fulfilled" ? res.value.durationMs : 0,
+            error: res.status === "rejected"
+              ? String(res.reason)
+              : res.value.error ?? "unknown error",
+          });
+          continue;
+        }
+
+        const runResult = res.value;
+        let parsed: unknown;
+        try { parsed = JSON.parse(runResult.rawOutput); } catch { parsed = runResult.rawOutput; }
+        const adapted = adaptScannerOutput(runResult.scanner, parsed);
+        const stats = sarifStore.ingestRun(adapted.document, adapted.sourceTool);
+        scanFindings += stats.accepted;
+
+        scanResults.push({
+          scanner: runResult.scanner,
+          success: true,
+          findingsIngested: stats.accepted,
+          durationMs: runResult.durationMs,
+        });
+      }
+
+      if (scanFindings > 0) await sarifStore.persist();
+
+      autoScanResult = {
+        detected: postDetections,
+        results: scanResults,
+        totalFindings: scanFindings,
+        totalDurationMs: Date.now() - scanStart,
+      };
     } catch (err) {
       logger.warn(
         { err: (err as Error).message },
-        "bootstrap: auto_scan after install failed",
+        "bootstrap: scan after install failed",
       );
     }
   }
