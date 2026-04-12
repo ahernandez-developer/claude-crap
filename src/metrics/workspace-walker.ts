@@ -17,7 +17,7 @@
 import { promises as fs } from "node:fs";
 import { join, relative } from "node:path";
 
-import { createExclusionFilter, type ExclusionFilter } from "../shared/exclusions.js";
+import { createExclusionFilter } from "../shared/exclusions.js";
 
 /**
  * Result returned by {@link estimateWorkspaceLoc}.
