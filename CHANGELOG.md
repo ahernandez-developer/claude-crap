@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.5] - 2026-04-12
+
+### Fixed
+
+- **MCP server workspace root** — removed `CLAUDE_CRAP_PLUGIN_ROOT`
+  env var from `.mcp.json` so `score_project` scans the user's
+  workspace instead of the plugin cache directory.
+- **ESLint false positives** — added Node.js globals for `.mjs`/`.cjs`,
+  disabled `no-undef` for TypeScript files, downgraded stylistic rules
+  from error to warn. Result: 0 error-level findings.
+
+### Changed
+
+- **README slimmed from 571 to 215 lines** — verbose sections moved to
+  `docs/quality-gate.md` and `docs/contributing.md`.
+
 ## [0.3.4] - 2026-04-12
 
 ### Fixed
