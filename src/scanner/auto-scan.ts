@@ -25,7 +25,9 @@ import type { Logger } from "pino";
 import { detectScanners, type ScannerDetection } from "./detector.js";
 import { runScanner, type ScannerRunResult } from "./runner.js";
 import { bootstrapScanner } from "./bootstrap.js";
+import { scanComplexity, type ComplexityScanResult } from "./complexity-scanner.js";
 import { adaptScannerOutput, type KnownScanner } from "../adapters/index.js";
+import type { TreeSitterEngine } from "../ast/tree-sitter-engine.js";
 import type { SarifStore } from "../sarif/sarif-store.js";
 
 // ── Types ──────────────────────────────────────────────────────────
@@ -53,6 +55,8 @@ export interface AutoScanResult {
   totalFindings: number;
   /** Wall-clock time for the entire auto-scan. */
   totalDurationMs: number;
+  /** Result of the built-in cyclomatic complexity scan, when enabled. */
+  complexityScan?: ComplexityScanResult;
 }
 
 // ── Orchestrator ───────────────────────────────────────────────────
@@ -93,6 +97,7 @@ export async function autoScan(
   workspaceRoot: string,
   sarifStore: SarifStore,
   logger: Logger,
+  options?: { engine?: TreeSitterEngine; cyclomaticMax?: number },
 ): Promise<AutoScanResult> {
   const start = Date.now();
 
@@ -246,10 +251,31 @@ export async function autoScan(
     await sarifStore.persist();
   }
 
+  // 5. Run built-in cyclomatic complexity scanner
+  let complexityScan: ComplexityScanResult | undefined;
+  if (options?.engine) {
+    try {
+      complexityScan = await scanComplexity(
+        workspaceRoot,
+        options.engine,
+        sarifStore,
+        { cyclomaticMax: options.cyclomaticMax ?? 15 },
+        logger,
+      );
+      totalFindings += complexityScan.violations;
+    } catch (err) {
+      logger.warn(
+        { err: (err as Error).message },
+        "auto-scan: complexity scanner failed — continuing without it",
+      );
+    }
+  }
+
   return {
     detected,
     results,
     totalFindings,
     totalDurationMs: Date.now() - start,
+    ...(complexityScan ? { complexityScan } : {}),
   };
 }

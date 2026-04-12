@@ -192,6 +192,131 @@
         font-size: 12px;
         overflow-x: auto;
       }
+      .file-link {
+        cursor: pointer;
+        color: var(--accent);
+      }
+      .file-link:hover {
+        text-decoration: underline;
+      }
+      .back-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--accent);
+        font-size: 13px;
+        cursor: pointer;
+        margin-bottom: 16px;
+      }
+      .back-link:hover { text-decoration: underline; }
+      .file-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 24px;
+        flex-wrap: wrap;
+      }
+      .file-header h2 {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 600;
+        word-break: break-all;
+      }
+      .lang-badge {
+        display: inline-block;
+        padding: 2px 10px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        background: rgba(62, 166, 255, 0.15);
+        color: var(--accent);
+      }
+      .grid.file-summary {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        margin-bottom: 8px;
+      }
+      @media (max-width: 880px) {
+        .grid.file-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      }
+      .card .stat-value {
+        font-size: 28px;
+        font-weight: 700;
+        margin: 4px 0 8px 0;
+        font-variant-numeric: tabular-nums;
+      }
+      .source-view {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        overflow-x: auto;
+        font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+        font-size: 12px;
+        line-height: 1.6;
+      }
+      .source-line {
+        display: flex;
+        min-height: 20px;
+        border-bottom: 1px solid transparent;
+      }
+      .source-line:hover {
+        background: rgba(255, 255, 255, 0.03);
+      }
+      .line-error {
+        background: rgba(231, 76, 60, 0.12);
+      }
+      .line-warning {
+        background: rgba(241, 196, 15, 0.08);
+      }
+      .line-note {
+        background: rgba(62, 166, 255, 0.08);
+      }
+      .line-fn-start {
+        border-top: 1px solid rgba(46, 204, 113, 0.25);
+      }
+      .line-number {
+        flex-shrink: 0;
+        width: 56px;
+        padding: 0 12px 0 12px;
+        text-align: right;
+        color: var(--muted);
+        user-select: none;
+        opacity: 0.6;
+      }
+      .line-gutter {
+        flex-shrink: 0;
+        width: 28px;
+        text-align: center;
+        padding: 0 2px;
+      }
+      .gutter-marker {
+        display: inline-block;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        font-size: 10px;
+        font-weight: 700;
+        line-height: 18px;
+        text-align: center;
+        color: #0b0d10;
+      }
+      .gutter-error { background: var(--rating-E); }
+      .gutter-warning { background: var(--rating-C); }
+      .gutter-note { background: var(--accent); }
+      .line-code {
+        flex: 1;
+        padding: 0 16px 0 4px;
+        white-space: pre;
+        tab-size: 4;
+      }
+      .line-fn-label {
+        color: var(--rating-A);
+        font-size: 10px;
+        font-weight: 600;
+        opacity: 0.7;
+        margin-left: 12px;
+      }
     </style>
   </head>
   <body>
@@ -209,11 +334,129 @@
       </header>
 
       <main>
-        <div v-if="loading" class="empty">Loading project score…</div>
-        <div v-else-if="error" class="empty">
+        <!-- ═══ FILE DETAIL VIEW ═══ -->
+        <template v-if="currentView === 'file-detail' && fileDetail">
+          <div class="back-link" @click="goBack()">&#8592; Back to dashboard</div>
+          <div class="file-header">
+            <h2>{{ fileDetail.filePath }}</h2>
+            <span v-if="fileDetail.language" class="lang-badge">{{ fileDetail.language }}</span>
+          </div>
+
+          <!-- Summary cards -->
+          <div class="grid file-summary">
+            <div class="card">
+              <h2>Lines of Code</h2>
+              <div class="stat-value">{{ fileDetail.physicalLoc }}</div>
+              <div class="detail">{{ fileDetail.logicalLoc }} logical lines</div>
+            </div>
+            <div class="card">
+              <h2>Functions</h2>
+              <div class="stat-value">{{ fileDetail.functions.length }}</div>
+              <div class="detail">
+                Avg CC: {{ fileDetail.summary.avgComplexity }} · Max CC: {{ fileDetail.summary.maxComplexity }}
+              </div>
+            </div>
+            <div class="card">
+              <h2>Findings</h2>
+              <div class="stat-value" :style="{ color: fileDetail.summary.totalFindings > 0 ? 'var(--rating-D)' : 'var(--rating-A)' }">
+                {{ fileDetail.summary.totalFindings }}
+              </div>
+              <div class="detail">
+                {{ fileDetail.summary.errorCount }} error · {{ fileDetail.summary.warningCount }} warning · {{ fileDetail.summary.noteCount }} note
+              </div>
+            </div>
+            <div class="card">
+              <h2>Effort</h2>
+              <div class="stat-value">{{ fileDetail.summary.totalEffortMinutes }}m</div>
+              <div class="detail">Estimated remediation</div>
+            </div>
+          </div>
+
+          <!-- Methods table -->
+          <div v-if="fileDetail.functions.length" class="section-title">Methods</div>
+          <div v-if="fileDetail.functions.length" class="card">
+            <table>
+              <thead>
+                <tr>
+                  <th>Method</th>
+                  <th style="text-align: right">Line</th>
+                  <th style="text-align: right">CC</th>
+                  <th style="text-align: right">Lines</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="fn in sortedFunctions" :key="fn.startLine">
+                  <td><code>{{ fn.name }}</code></td>
+                  <td style="text-align: right; font-variant-numeric: tabular-nums;">{{ fn.startLine }}</td>
+                  <td style="text-align: right; font-variant-numeric: tabular-nums;">{{ fn.cyclomaticComplexity }}</td>
+                  <td style="text-align: right; font-variant-numeric: tabular-nums;">{{ fn.lineCount }}</td>
+                  <td>
+                    <span v-if="fn.cyclomaticComplexity >= fileDetail.cyclomaticMax * 2" class="pill pill-error">error</span>
+                    <span v-else-if="fn.cyclomaticComplexity > fileDetail.cyclomaticMax" class="pill pill-warning">warning</span>
+                    <span v-else class="pill pill-note">ok</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Findings table -->
+          <div v-if="fileDetail.findings.length" class="section-title">Findings</div>
+          <div v-if="fileDetail.findings.length" class="card">
+            <table>
+              <thead>
+                <tr>
+                  <th>Rule</th>
+                  <th>Level</th>
+                  <th>Message</th>
+                  <th style="text-align: right">Line</th>
+                  <th>Tool</th>
+                  <th style="text-align: right">Effort</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(f, i) in sortedFindings" :key="i">
+                  <td><code>{{ f.ruleId }}</code></td>
+                  <td>
+                    <span :class="'pill pill-' + f.level">{{ f.level }}</span>
+                  </td>
+                  <td style="max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ f.message }}</td>
+                  <td style="text-align: right; font-variant-numeric: tabular-nums;">{{ f.startLine }}</td>
+                  <td>{{ f.sourceTool }}</td>
+                  <td style="text-align: right; font-variant-numeric: tabular-nums;">{{ f.effortMinutes }}m</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Annotated source code -->
+          <div class="section-title">Source</div>
+          <div class="source-view">
+            <div
+              v-for="(line, idx) in fileDetail.sourceLines"
+              :key="idx"
+              :class="['source-line', lineClass(idx + 1)]"
+            >
+              <div class="line-number">{{ idx + 1 }}</div>
+              <div class="line-gutter">
+                <span
+                  v-if="lineFindings(idx + 1).length"
+                  :class="['gutter-marker', gutterClass(idx + 1)]"
+                  :title="lineFindings(idx + 1).map(f => f.ruleId + ': ' + f.message).join('\\n')"
+                >{{ lineFindings(idx + 1).length }}</span>
+              </div>
+              <div class="line-code">{{ line }}<span v-if="lineFnLabel(idx + 1)" class="line-fn-label">{{ lineFnLabel(idx + 1) }}</span></div>
+            </div>
+          </div>
+        </template>
+
+        <!-- ═══ DASHBOARD VIEW ═══ -->
+        <div v-else-if="currentView === 'dashboard' && loading" class="empty">Loading project score…</div>
+        <div v-else-if="currentView === 'dashboard' && error" class="empty">
           Failed to load score: <code>{{ error }}</code>
         </div>
-        <template v-else-if="score">
+        <template v-else-if="currentView === 'dashboard' && score">
           <!-- Top summary cards -->
           <div class="grid summary">
             <div class="card">
@@ -283,12 +526,52 @@
               </thead>
               <tbody>
                 <tr v-for="[file, count] in fileEntries" :key="file">
-                  <td><code>{{ file }}</code></td>
+                  <td><code class="file-link" @click="navigateToFile(file)">{{ file }}</code></td>
                   <td style="text-align: right">{{ count }}</td>
                 </tr>
               </tbody>
             </table>
             <div v-else class="empty">No findings in the consolidated SARIF report yet.</div>
+          </div>
+
+          <!-- Complexity hotspots -->
+          <div class="section-title">Complexity Hotspots</div>
+          <div class="card">
+            <div v-if="complexity" style="margin-bottom: 12px; color: var(--muted); font-size: 13px;">
+              Threshold: <strong style="color: var(--fg);">{{ complexity.threshold }}</strong>
+              &nbsp;·&nbsp;
+              {{ complexity.totalFunctions }} functions analyzed
+              &nbsp;·&nbsp;
+              <span :style="{ color: complexity.violationCount > 0 ? 'var(--rating-D)' : 'var(--rating-A)' }">
+                {{ complexity.violationCount }} violation{{ complexity.violationCount !== 1 ? 's' : '' }}
+              </span>
+            </div>
+            <table v-if="complexity && complexity.topFunctions.length">
+              <thead>
+                <tr>
+                  <th>File</th>
+                  <th>Function</th>
+                  <th style="text-align: right">CC</th>
+                  <th style="text-align: right">Lines</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="fn in complexity.topFunctions" :key="fn.filePath + ':' + fn.startLine">
+                  <td><code class="file-link" @click="navigateToFile(fn.filePath)">{{ fn.filePath }}</code></td>
+                  <td><code>{{ fn.name }}</code></td>
+                  <td style="text-align: right; font-variant-numeric: tabular-nums;">{{ fn.cyclomaticComplexity }}</td>
+                  <td style="text-align: right; font-variant-numeric: tabular-nums;">{{ fn.lineCount }}</td>
+                  <td>
+                    <span v-if="fn.cyclomaticComplexity >= complexity.threshold * 2" class="pill pill-error">error</span>
+                    <span v-else-if="fn.cyclomaticComplexity > complexity.threshold" class="pill pill-warning">warning</span>
+                    <span v-else class="pill pill-note">ok</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <div v-else-if="complexity" class="empty">No functions analyzed yet.</div>
+            <div v-else class="empty">Loading complexity data…</div>
           </div>
 
           <!-- Where to drill in -->
@@ -311,11 +594,18 @@
     </div>
 
     <script>
-      const { createApp, ref, computed, onMounted } = Vue;
+      const { createApp, ref, computed, onMounted, onUnmounted, watch } = Vue;
 
       createApp({
         setup() {
+          // ── Navigation state ──
+          const currentView = ref("dashboard"); // "dashboard" | "file-detail"
+          const selectedFile = ref(null);
+          const fileDetail = ref(null);
+
+          // ── Dashboard state ──
           const score = ref(null);
+          const complexity = ref(null);
           const loading = ref(true);
           const error = ref(null);
 
@@ -331,12 +621,129 @@
               .slice(0, 10);
           });
 
-          function formatTimestamp(iso) {
-            try {
-              return new Date(iso).toLocaleString();
-            } catch {
-              return iso;
+          // ── File detail computed ──
+          const sortedFunctions = computed(() => {
+            if (!fileDetail.value) return [];
+            return [...fileDetail.value.functions].sort((a, b) => b.cyclomaticComplexity - a.cyclomaticComplexity);
+          });
+
+          const sortedFindings = computed(() => {
+            if (!fileDetail.value) return [];
+            return [...fileDetail.value.findings].sort((a, b) => a.startLine - b.startLine);
+          });
+
+          // Build a per-line lookup: line number → array of findings on that line
+          const findingsByLine = computed(() => {
+            const map = {};
+            if (!fileDetail.value) return map;
+            for (const f of fileDetail.value.findings) {
+              const start = f.startLine;
+              const end = f.endLine || start;
+              for (let ln = start; ln <= end; ln++) {
+                if (!map[ln]) map[ln] = [];
+                map[ln].push(f);
+              }
             }
+            return map;
+          });
+
+          // Build a per-line lookup: line number → worst finding level
+          const worstLevelByLine = computed(() => {
+            const map = {};
+            const rank = { error: 3, warning: 2, note: 1 };
+            for (const [ln, findings] of Object.entries(findingsByLine.value)) {
+              let worst = 0;
+              let worstLevel = null;
+              for (const f of findings) {
+                const r = rank[f.level] || 0;
+                if (r > worst) { worst = r; worstLevel = f.level; }
+              }
+              map[ln] = worstLevel;
+            }
+            return map;
+          });
+
+          // Build a set of function start lines for labels
+          const fnStartLines = computed(() => {
+            const map = {};
+            if (!fileDetail.value) return map;
+            for (const fn of fileDetail.value.functions) {
+              map[fn.startLine] = fn.name + " (CC:" + fn.cyclomaticComplexity + ")";
+            }
+            return map;
+          });
+
+          function lineFindings(lineNum) {
+            return findingsByLine.value[lineNum] || [];
+          }
+
+          function lineClass(lineNum) {
+            const level = worstLevelByLine.value[lineNum];
+            if (level === "error") return "line-error";
+            if (level === "warning") return "line-warning";
+            if (level === "note") return "line-note";
+            if (fnStartLines.value[lineNum]) return "line-fn-start";
+            return "";
+          }
+
+          function gutterClass(lineNum) {
+            const level = worstLevelByLine.value[lineNum];
+            if (level === "error") return "gutter-error";
+            if (level === "warning") return "gutter-warning";
+            return "gutter-note";
+          }
+
+          function lineFnLabel(lineNum) {
+            return fnStartLines.value[lineNum] || "";
+          }
+
+          // ── Navigation ──
+          function navigateToFile(path) {
+            window.location.hash = "#file=" + encodeURIComponent(path);
+          }
+
+          function goBack() {
+            window.location.hash = "";
+          }
+
+          async function loadFileDetail(path) {
+            selectedFile.value = path;
+            currentView.value = "file-detail";
+            fileDetail.value = null;
+            try {
+              const res = await fetch("/api/file-detail?path=" + encodeURIComponent(path));
+              if (!res.ok) throw new Error("HTTP " + res.status);
+              fileDetail.value = await res.json();
+            } catch (err) {
+              fileDetail.value = null;
+              error.value = "Failed to load file detail: " + (err.message || err);
+              currentView.value = "dashboard";
+            }
+          }
+
+          function handleHashChange() {
+            const hash = window.location.hash;
+            if (hash.startsWith("#file=")) {
+              const path = decodeURIComponent(hash.substring(6));
+              loadFileDetail(path);
+            } else {
+              currentView.value = "dashboard";
+              selectedFile.value = null;
+              fileDetail.value = null;
+            }
+          }
+
+          // ── Dashboard data ──
+          function formatTimestamp(iso) {
+            try { return new Date(iso).toLocaleString(); }
+            catch { return iso; }
+          }
+
+          async function refreshComplexity() {
+            try {
+              const res = await fetch("/api/complexity");
+              if (res.ok) complexity.value = await res.json();
+            } catch { /* non-fatal */ }
           }
 
           async function refresh() {
@@ -351,16 +758,29 @@
             } finally {
               loading.value = false;
             }
+            refreshComplexity();
           }
 
           onMounted(() => {
             refresh();
-            // Poll every 10s so the dashboard stays roughly in sync
-            // with new ingestions without requiring a manual reload.
             setInterval(refresh, 10_000);
+            window.addEventListener("hashchange", handleHashChange);
+            // Check if page loaded with a hash already
+            handleHashChange();
           });
 
-          return { score, loading, error, toolEntries, fileEntries, formatTimestamp };
+          onUnmounted(() => {
+            window.removeEventListener("hashchange", handleHashChange);
+          });
+
+          return {
+            currentView, selectedFile, fileDetail,
+            score, complexity, loading, error,
+            toolEntries, fileEntries, formatTimestamp,
+            sortedFunctions, sortedFindings,
+            navigateToFile, goBack,
+            lineFindings, lineClass, gutterClass, lineFnLabel,
+          };
         },
       }).mount("#app");
     </script>
