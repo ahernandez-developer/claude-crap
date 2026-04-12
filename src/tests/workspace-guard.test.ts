@@ -26,7 +26,7 @@ describe("resolveWithinWorkspace — characterization (well-formed paths)", () =
   let workspace = "";
 
   before(async () => {
-    workspace = await mkdtemp(join(tmpdir(), "claude-sonar-wg-"));
+    workspace = await mkdtemp(join(tmpdir(), "claude-crap-wg-"));
   });
 
   after(async () => {
@@ -59,7 +59,7 @@ describe("resolveWithinWorkspace — attack invariants (outside paths rejected)"
   let workspace = "";
 
   before(async () => {
-    workspace = await mkdtemp(join(tmpdir(), "claude-sonar-wg-"));
+    workspace = await mkdtemp(join(tmpdir(), "claude-crap-wg-"));
   });
 
   after(async () => {

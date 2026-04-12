@@ -1,20 +1,20 @@
 ---
 name: analyze
-description: Run tree-sitter AST analysis on a source file using claude-sonar's deterministic engine and report per-function cyclomatic complexity plus physical and logical lines of code. Use this skill whenever the user asks "what's the complexity of this file", "how complex is foo.ts", "show me cyclomatic complexity per function", "analyze this file's structure", "which functions in this file are too complex", "where should I refactor first in this module", or needs to pick candidates for refactoring based on complexity. Also use this skill proactively when a file feels "big" and you want a ranked list of hot-spot functions before proposing a refactor plan — the tree-sitter engine gives exact numbers instead of eyeball estimates. Supports TypeScript, JavaScript, Python, Java, and C#; the language is detected automatically from the file extension. Takes a single file path as the argument after the skill name.
+description: Run tree-sitter AST analysis on a source file using claude-crap's deterministic engine and report per-function cyclomatic complexity plus physical and logical lines of code. Use this skill whenever the user asks "what's the complexity of this file", "how complex is foo.ts", "show me cyclomatic complexity per function", "analyze this file's structure", "which functions in this file are too complex", "where should I refactor first in this module", or needs to pick candidates for refactoring based on complexity. Also use this skill proactively when a file feels "big" and you want a ranked list of hot-spot functions before proposing a refactor plan — the tree-sitter engine gives exact numbers instead of eyeball estimates. Supports TypeScript, JavaScript, Python, Java, and C#; the language is detected automatically from the file extension. Takes a single file path as the argument after the skill name.
 ---
 
 # Analyze a source file with tree-sitter
 
-Run the `analyze_file_ast` MCP tool from the claude-sonar server against a user-supplied file and report deterministic AST metrics.
+Run the `analyze_file_ast` MCP tool from the claude-crap server against a user-supplied file and report deterministic AST metrics.
 
 ## Arguments
 
 The user supplies a file path as the argument, typed after the skill name:
 
 ```
-/claude-sonar:analyze src/index.ts
-/claude-sonar:analyze app/main.py
-/claude-sonar:analyze lib/foo.cs
+/claude-crap:analyze src/index.ts
+/claude-crap:analyze app/main.py
+/claude-crap:analyze lib/foo.cs
 ```
 
 ## Steps
@@ -45,7 +45,7 @@ The user supplies a file path as the argument, typed after the skill name:
 
 6. **Flag refactoring candidates**. Any function whose cyclomatic complexity exceeds `15` (the plugin's default `cyclomaticMax`) is a Stop-gate warning candidate — call those out explicitly as "above the cyclomatic ceiling; refactor candidate". A function above `30` will fail the CRAP quality gate regardless of coverage and MUST be decomposed; those are the highest-priority targets.
 
-7. **Handle errors gracefully**. If the tool returns `status: "error"`, the most likely cause is a tree-sitter grammar that failed to load (`Could not load wasm grammar for language X`). Tell the user they may need to reinstall the plugin via `/plugin install claude-sonar@herz` so the bundled WASM grammars are re-extracted into the plugin cache.
+7. **Handle errors gracefully**. If the tool returns `status: "error"`, the most likely cause is a tree-sitter grammar that failed to load (`Could not load wasm grammar for language X`). Tell the user they may need to reinstall the plugin via `/plugin install claude-crap@herz` so the bundled WASM grammars are re-extracted into the plugin cache.
 
 ## What the user will see
 

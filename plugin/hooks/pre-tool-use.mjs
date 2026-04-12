@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // @ts-check
 /**
- * claude-sonar :: PreToolUse hook — prophylactic gatekeeper.
+ * claude-crap :: PreToolUse hook — prophylactic gatekeeper.
  *
  * Contract with Claude Code (see https://code.claude.com/docs/en/hooks):
  *
@@ -12,7 +12,7 @@
  *   exit 0 : Allow the tool call.
  *   exit 2 : ABORT the tool call. Claude Code forwards stderr to the LLM.
  *   exit N : Non-zero, non-2 exit. Treated by Claude Code as "allow"
- *            (fail-open). claude-sonar uses this code only for LOW-RISK
+ *            (fail-open). claude-crap uses this code only for LOW-RISK
  *            tools when the hook itself errors; HIGH-RISK tools always
  *            fall back to exit 2 (fail-closed) — see the allowlist below.
  *
@@ -106,7 +106,7 @@ async function readStdinRaw() {
  */
 function parseStdinJson(raw) {
   if (!raw) {
-    throw new Error("stdin was empty — claude-sonar PreToolUse expected a hook JSON payload");
+    throw new Error("stdin was empty — claude-crap PreToolUse expected a hook JSON payload");
   }
   try {
     return JSON.parse(raw);
@@ -177,7 +177,7 @@ function isHighRiskTool(toolName) {
  */
 function renderFailClosedMessage({ toolName, phase, detail }) {
   return [
-    "╭─ claude-sonar :: PreToolUse BLOCKED (fail-closed) ───────────────",
+    "╭─ claude-crap :: PreToolUse BLOCKED (fail-closed) ───────────────",
     "│ rule : SONAR-GATEKEEPER-FAILCLOSED",
     `│ tool : ${toolName}`,
     `│ phase: ${phase}`,
@@ -221,7 +221,7 @@ function exitOnInternalError({ toolName, phase, detail }) {
     process.exit(EXIT_BLOCK);
   }
   process.stderr.write(
-    `[claude-sonar] PreToolUse: ${phase} failure (${detail}). ` +
+    `[claude-crap] PreToolUse: ${phase} failure (${detail}). ` +
       `Tool '${toolName ?? "<unknown>"}' is not in the high-risk allowlist; ` +
       `falling back to permissive mode (fail-open).\n`,
   );
@@ -260,7 +260,7 @@ async function main() {
       // the agent's context whenever a hook exits with code 2, so this
       // text effectively becomes a prompt. Keep it imperative and actionable.
       const message = [
-        "╭─ claude-sonar :: PreToolUse BLOCKED ────────────────────────────",
+        "╭─ claude-crap :: PreToolUse BLOCKED ────────────────────────────",
         `│ rule : ${verdict.ruleId}`,
         `│ tool : ${input.tool_name}`,
         "│",

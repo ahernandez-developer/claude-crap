@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // @ts-check
 /**
- * claude-sonar :: PostToolUse hook — retrospective verifier.
+ * claude-crap :: PostToolUse hook — retrospective verifier.
  *
  * This hook runs immediately AFTER a Write / Edit / MultiEdit / NotebookEdit
  * call has mutated a file on disk. Its job is to inspect the artifact the

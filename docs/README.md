@@ -1,6 +1,6 @@
-# claude-sonar documentation
+# claude-crap documentation
 
-Deep reference for every subsystem of the `claude-sonar` plugin.
+Deep reference for every subsystem of the `claude-crap` plugin.
 The top-level [README](../README.md) is the landing page and covers
 installation, install paths, and a high-level tour. The files in this
 directory go one level deeper and stay there.
@@ -24,7 +24,7 @@ Read them in this order if you are ramping up:
 6. [Scanner adapters](./scanner-adapters.md) — Semgrep, ESLint,
    Bandit, Stryker normalizers; how to add a new scanner.
 7. [SDK reference](./sdk.md) — every symbol exposed under
-   `claude-sonar` and its subpaths, with usage examples.
+   `claude-crap` and its subpaths, with usage examples.
 8. [Contributing](./contributing.md) — dev loop, test layout, release
    scripts, coding conventions.
 
@@ -32,7 +32,7 @@ Read them in this order if you are ramping up:
 
 | I want to... | Read |
 | --- | --- |
-| Understand why claude-sonar exists | [architecture-overview.md](./architecture-overview.md) |
+| Understand why claude-crap exists | [architecture-overview.md](./architecture-overview.md) |
 | Know what every hook does and when it fires | [hooks.md](./hooks.md) |
 | Look up an MCP tool's schema or error codes | [mcp-tools.md](./mcp-tools.md) |
 | Derive a CRAP score by hand | [quality-gate.md](./quality-gate.md) |

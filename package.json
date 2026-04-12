@@ -1,5 +1,5 @@
 {
-  "name": "@sr-herz/claude-sonar",
+  "name": "@sr-herz/claude-crap",
   "version": "0.1.2",
   "description": "Deterministic QA plugin for Claude Code — CRAP index, Technical Debt Ratio, tree-sitter AST, SARIF 2.1.0, hooks, and a local Vue dashboard.",
   "keywords": [
@@ -18,13 +18,13 @@
     "mcp",
     "tree-sitter"
   ],
-  "homepage": "https://github.com/ahernandez-developer/claude-sonar",
+  "homepage": "https://github.com/ahernandez-developer/claude-crap",
   "bugs": {
-    "url": "https://github.com/ahernandez-developer/claude-sonar/issues"
+    "url": "https://github.com/ahernandez-developer/claude-crap/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ahernandez-developer/claude-sonar.git"
+    "url": "git+https://github.com/ahernandez-developer/claude-crap.git"
   },
   "license": "MIT",
   "author": "Alan Hernandez",
@@ -32,7 +32,7 @@
   "main": "./dist/sdk.js",
   "types": "./dist/sdk.d.ts",
   "bin": {
-    "claude-sonar": "./bin/claude-sonar.mjs"
+    "claude-crap": "./bin/claude-crap.mjs"
   },
   "exports": {
     ".": {
@@ -91,8 +91,8 @@
     "test:harness": "node ./scripts/run-tests.mjs \"./src/tests/test-harness.test.ts\"",
     "test:adapters": "node ./scripts/run-tests.mjs \"./src/tests/adapters/**/*.test.ts\"",
     "test:integration": "node ./scripts/run-tests.mjs \"./src/tests/integration/**/*.test.ts\"",
-    "doctor": "node ./bin/claude-sonar.mjs doctor",
-    "status": "node ./bin/claude-sonar.mjs status",
+    "doctor": "node ./bin/claude-crap.mjs doctor",
+    "status": "node ./bin/claude-crap.mjs status",
     "bug-report": "node ./scripts/bug-report.mjs",
     "clean": "rm -rf ./dist",
     "build:plugin": "node ./scripts/bundle-plugin.mjs",

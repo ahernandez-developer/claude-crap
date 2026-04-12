@@ -18,7 +18,7 @@
  * The store is intentionally simple: it does NOT attempt to preserve
  * per-tool run separation inside the persisted file. Instead, every
  * ingested run is flattened into a single `runs[0]` entry whose `tool.driver`
- * is claude-sonar itself, and the original scanner name is recorded on
+ * is claude-crap itself, and the original scanner name is recorded on
  * each finding via the `properties.sourceTool` field. This keeps the
  * consolidated document easy to diff between sessions.
  *
@@ -275,9 +275,9 @@ export class SarifStore {
 
     return buildSarifDocument(
       {
-        name: "claude-sonar",
+        name: "claude-crap",
         version: "0.1.0",
-        informationUri: "https://github.com/local/claude-sonar",
+        informationUri: "https://github.com/local/claude-crap",
       },
       findings,
     );

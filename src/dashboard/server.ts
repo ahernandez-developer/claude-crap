@@ -1,5 +1,5 @@
 /**
- * Local Vue.js dashboard for claude-sonar — Fastify HTTP server.
+ * Local Vue.js dashboard for claude-crap — Fastify HTTP server.
  *
  * The dashboard runs in the same Node.js process as the MCP server,
  * but on a separate TCP port (default 5117). It exposes:
@@ -32,7 +32,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import fastifyStatic from "@fastify/static";
 import type { Logger } from "pino";
 
-import type { SonarConfig } from "../config.js";
+import type { CrapConfig } from "../config.js";
 import {
   computeProjectScore,
   type ProjectScore,
@@ -52,7 +52,7 @@ export type WorkspaceStatsProvider = () => Promise<WorkspaceStats>;
  */
 export interface StartDashboardOptions {
   /** Fully resolved server configuration. */
-  readonly config: SonarConfig;
+  readonly config: CrapConfig;
   /** Live SARIF store the dashboard reads findings from. */
   readonly sarifStore: SarifStore;
   /** Function that returns up-to-date LOC + file count for the workspace. */
@@ -100,7 +100,7 @@ export async function startDashboard(options: StartDashboardOptions): Promise<Da
   // ------------------------------------------------------------------
   // /api/health — liveness probe
   // ------------------------------------------------------------------
-  fastify.get("/api/health", async () => ({ status: "ok", server: "claude-sonar", version: "0.1.0" }));
+  fastify.get("/api/health", async () => ({ status: "ok", server: "claude-crap", version: "0.1.0" }));
 
   // ------------------------------------------------------------------
   // /api/score — live project score
@@ -122,7 +122,7 @@ export async function startDashboard(options: StartDashboardOptions): Promise<Da
 
   await fastify.listen({ port: config.dashboardPort, host: "127.0.0.1" });
   const url = `http://127.0.0.1:${config.dashboardPort}`;
-  logger.info({ url, publicRoot }, "claude-sonar dashboard listening");
+  logger.info({ url, publicRoot }, "claude-crap dashboard listening");
 
   return {
     url,
@@ -164,7 +164,7 @@ async function resolvePublicRoot(logger: Logger): Promise<string> {
   }
   logger.error({ candidates }, "dashboard public/ directory not found");
   throw new Error(
-    `[claude-sonar] dashboard: index.html not found in any of ${candidates.join(", ")}`,
+    `[claude-crap] dashboard: index.html not found in any of ${candidates.join(", ")}`,
   );
 }
 
@@ -173,7 +173,7 @@ async function resolvePublicRoot(logger: Logger): Promise<string> {
  * info. Falls back to the configured port when the address info is
  * not yet available (e.g. on the very first request during startup).
  */
-function urlOf(fastify: FastifyInstance, config: SonarConfig): string {
+function urlOf(fastify: FastifyInstance, config: CrapConfig): string {
   const addresses = fastify.addresses?.() ?? [];
   const first = addresses[0];
   if (first) {
@@ -188,7 +188,7 @@ function urlOf(fastify: FastifyInstance, config: SonarConfig): string {
  * it with the live store and provide consistent location metadata.
  */
 async function buildScore(
-  config: SonarConfig,
+  config: CrapConfig,
   sarifStore: SarifStore,
   workspace: WorkspaceStats,
   dashboardUrl: string | null,

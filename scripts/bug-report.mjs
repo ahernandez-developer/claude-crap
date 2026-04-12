@@ -1,6 +1,6 @@
 // @ts-check
 /**
- * `claude-sonar bug-report` — generate a diagnostic bundle for triage.
+ * `claude-crap bug-report` — generate a diagnostic bundle for triage.
  *
  * Inspired by claude-mem's `npm run bug-report`. Collects every piece
  * of information a maintainer typically asks for when triaging an
@@ -24,7 +24,7 @@
  *
  * Usage:
  *
- *   node ./scripts/bug-report.mjs            # writes ./claude-sonar-bug-report-<ts>.md
+ *   node ./scripts/bug-report.mjs            # writes ./claude-crap-bug-report-<ts>.md
  *   node ./scripts/bug-report.mjs --stdout   # prints to stdout instead
  *   node ./scripts/bug-report.mjs -o foo.md  # explicit output path
  *
@@ -86,9 +86,9 @@ export default async function bugReportCommand(ctx) {
 
   const outPath =
     explicitOut ??
-    join(process.cwd(), `claude-sonar-bug-report-${timestampSlug()}.md`);
+    join(process.cwd(), `claude-crap-bug-report-${timestampSlug()}.md`);
   await fs.writeFile(outPath, report, "utf8");
-  process.stdout.write(`claude-sonar: bug report written to ${outPath}\n`);
+  process.stdout.write(`claude-crap: bug report written to ${outPath}\n`);
   return 0;
 }
 
@@ -104,7 +104,7 @@ export async function generateBugReport(pluginRoot) {
   const lines = [];
 
   // --- header ---
-  lines.push(`# claude-sonar bug report`);
+  lines.push(`# claude-crap bug report`);
   lines.push("");
   lines.push(`_Generated: ${new Date().toISOString()}_`);
   lines.push("");
@@ -112,7 +112,7 @@ export async function generateBugReport(pluginRoot) {
   const version = await readPackageVersion(pluginRoot);
   lines.push(`| Field | Value |`);
   lines.push(`| --- | --- |`);
-  lines.push(`| claude-sonar version | \`${version}\` |`);
+  lines.push(`| claude-crap version | \`${version}\` |`);
   lines.push(`| Node.js | \`${process.versions.node}\` |`);
   lines.push(`| npm | \`${tryExec("npm", ["-v"])}\` |`);
   lines.push(`| Platform | \`${platform()} ${release()} ${arch()}\` |`);
@@ -164,7 +164,7 @@ export async function generateBugReport(pluginRoot) {
     .filter(([k]) => k.startsWith("CLAUDE"))
     .sort(([a], [b]) => a.localeCompare(b));
   if (relevantEnv.length === 0) {
-    lines.push(`_No claude-sonar env vars set._`);
+    lines.push(`_No claude-crap env vars set._`);
   } else {
     lines.push("```");
     for (const [k, v] of relevantEnv) {
@@ -177,10 +177,10 @@ export async function generateBugReport(pluginRoot) {
   lines.push("");
 
   // --- doctor output ---
-  lines.push(`## \`claude-sonar doctor\` output`);
+  lines.push(`## \`claude-crap doctor\` output`);
   lines.push("");
   lines.push("```");
-  const doctorBin = join(pluginRoot, "bin", "claude-sonar.mjs");
+  const doctorBin = join(pluginRoot, "bin", "claude-crap.mjs");
   const doctor = spawnSync(process.execPath, [doctorBin, "doctor"], {
     env: { ...process.env, NO_COLOR: "1" },
     encoding: "utf8",
@@ -194,7 +194,7 @@ export async function generateBugReport(pluginRoot) {
   // --- SARIF report (if any) ---
   lines.push(`## Consolidated SARIF report`);
   lines.push("");
-  const sarifPath = join(process.cwd(), ".claude-sonar", "reports", "latest.sarif");
+  const sarifPath = join(process.cwd(), ".claude-crap", "reports", "latest.sarif");
   if (await exists(sarifPath)) {
     try {
       const raw = await fs.readFile(sarifPath, "utf8");
@@ -313,7 +313,7 @@ function timestampSlug() {
 }
 
 // When run directly via `node ./scripts/bug-report.mjs`, delegate to
-// the CLI wrapper. When imported by bin/claude-sonar.mjs, the default
+// the CLI wrapper. When imported by bin/claude-crap.mjs, the default
 // export is consumed instead.
 const isDirectInvocation =
   import.meta.url === `file://${process.argv[1]}` ||
@@ -322,7 +322,7 @@ if (isDirectInvocation) {
   bugReportCommand({ pluginRoot: PLUGIN_ROOT, argv: process.argv.slice(2) })
     .then((code) => process.exit(code ?? 0))
     .catch((err) => {
-      process.stderr.write(`claude-sonar bug-report: ${err?.message ?? err}\n`);
+      process.stderr.write(`claude-crap bug-report: ${err?.message ?? err}\n`);
       process.exit(1);
     });
 }

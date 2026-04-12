@@ -8,15 +8,15 @@
  * `runs[]`, a `results` array of wrong-type entries, or a result
  * without a `ruleId` would still be accepted by the MCP tool and
  * flow through to the store, the dashboard, and any downstream
- * consumer that uploads claude-sonar's SARIF to GitHub code-scanning
+ * consumer that uploads claude-crap's SARIF to GitHub code-scanning
  * or an IDE viewer.
  *
  * This module uses the `ajv` dependency (already in package.json) to
  * compile a minimal JSON Schema that covers exactly the fields
- * claude-sonar reads: `version`, `runs`, `runs[].tool.driver.name`,
+ * claude-crap reads: `version`, `runs`, `runs[].tool.driver.name`,
  * and the per-result shape. Everything else (tool metadata, rule
  * definitions, snippets, etc.) is passthrough — we do not enforce
- * the full SARIF 2.1.0 spec because claude-sonar does not consume
+ * the full SARIF 2.1.0 spec because claude-crap does not consume
  * those fields.
  *
  * The compiled validator is cached so the ~5 ms AJV compile cost is
@@ -28,7 +28,7 @@
 import { Ajv, type ValidateFunction } from "ajv";
 
 /**
- * Minimal JSON Schema covering every field claude-sonar reads from a
+ * Minimal JSON Schema covering every field claude-crap reads from a
  * SARIF 2.1.0 document. Passthrough fields are allowed because
  * `additionalProperties` is left at the default (`true`).
  *

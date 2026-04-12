@@ -12,7 +12,7 @@
  *   type FileMetrics,
  *   type FunctionMetrics,
  *   type SupportedLanguage,
- * } from "@sr-herz/claude-sonar/ast";
+ * } from "@sr-herz/claude-crap/ast";
  * ```
  *
  * @module ast

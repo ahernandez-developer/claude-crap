@@ -1,6 +1,6 @@
 // @ts-check
 /**
- * `claude-sonar install` — prepare the workspace and print the Claude
+ * `claude-crap install` — prepare the workspace and print the Claude
  * Code registration command.
  *
  * This subcommand does every bit of side-effecty work that the plugin
@@ -14,7 +14,7 @@
  *      still check so a manual clone also works).
  *   3. `chmod +x` the hook scripts and the bin entrypoint (defensive —
  *      npm should handle this but tarballs sometimes lose the bits).
- *   4. Create `.claude-sonar/reports/` inside the current workspace so
+ *   4. Create `.claude-crap/reports/` inside the current workspace so
  *      the SARIF store can write without a race on its first ingestion.
  *   5. Print the exact Claude Code command the user needs to run next.
  *
@@ -35,13 +35,13 @@ import { printBanner, printStep, paint, icons } from "./lib/cli-ui.mjs";
  */
 
 /**
- * Entrypoint invoked by `bin/claude-sonar.mjs`.
+ * Entrypoint invoked by `bin/claude-crap.mjs`.
  *
  * @param {CommandContext} ctx
  * @returns {Promise<number>} Exit code (0 = success, 1 = failure).
  */
 export default async function install(ctx) {
-  printBanner("claude-sonar :: install");
+  printBanner("claude-crap :: install");
 
   const checks = [];
   checks.push(await checkNodeVersion());
@@ -55,7 +55,7 @@ export default async function install(ctx) {
   if (hasFailure) {
     process.stdout.write(
       `\n${paint.red(icons.fail)} Installation prerequisites failed. ` +
-        `Run ${paint.bold("claude-sonar doctor")} for details.\n`,
+        `Run ${paint.bold("claude-crap doctor")} for details.\n`,
     );
     return 1;
   }
@@ -67,7 +67,7 @@ export default async function install(ctx) {
   process.stdout.write(
     [
       "",
-      `${paint.green(icons.ok)} claude-sonar is ready to register with Claude Code.`,
+      `${paint.green(icons.ok)} claude-crap is ready to register with Claude Code.`,
       "",
       `  Plugin root: ${paint.cyan(pluginDir)}`,
       "",
@@ -77,13 +77,13 @@ export default async function install(ctx) {
       `       ${paint.cyan(`/plugin install ${pluginDir}`)}`,
       "",
       "  2. Marketplace install (if the plugin is published to GitHub):",
-      `       ${paint.cyan("/plugin marketplace add ahernandez-developer/claude-sonar")}`,
-      `       ${paint.cyan("/plugin install claude-sonar")}`,
+      `       ${paint.cyan("/plugin marketplace add ahernandez-developer/claude-crap")}`,
+      `       ${paint.cyan("/plugin install claude-crap")}`,
       "",
       paint.dim("  Then open a Claude Code session in this workspace. The"),
       paint.dim("  PreToolUse gatekeeper, PostToolUse verifier, Stop quality"),
       paint.dim("  gate, and the local Vue dashboard will all start on their"),
-      paint.dim("  own. Run `claude-sonar doctor` any time to re-verify."),
+      paint.dim("  own. Run `claude-crap doctor` any time to re-verify."),
       "",
     ].join("\n"),
   );
@@ -103,7 +103,7 @@ async function checkNodeVersion() {
     return {
       status: "fail",
       label: `Node.js runtime`,
-      detail: `Found ${raw}, claude-sonar requires ≥ 20.0.0. Install a newer Node.js and retry.`,
+      detail: `Found ${raw}, claude-crap requires ≥ 20.0.0. Install a newer Node.js and retry.`,
     };
   }
   return { status: "ok", label: `Node.js runtime (${raw})` };
@@ -174,7 +174,7 @@ async function chmodHooks(pluginRoot) {
  * @returns {Promise<import("./lib/cli-ui.mjs").StepResult>}
  */
 async function ensureReportsDir(workspace) {
-  const dir = resolve(workspace, ".claude-sonar", "reports");
+  const dir = resolve(workspace, ".claude-crap", "reports");
   try {
     await fs.mkdir(dir, { recursive: true });
     return {

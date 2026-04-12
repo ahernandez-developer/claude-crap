@@ -1,10 +1,10 @@
 /**
- * Frontmatter contract for claude-sonar's shipped skills.
+ * Frontmatter contract for claude-crap's shipped skills.
  *
  * Every directory under `skills/` at the plugin root must contain a
  * SKILL.md file with YAML frontmatter declaring at minimum `name`
  * and `description`. The `name` has to match the directory name so
- * Claude Code's slash-command namespace (`/claude-sonar:<name>`)
+ * Claude Code's slash-command namespace (`/claude-crap:<name>`)
  * resolves cleanly. The `description` drives model-invocation
  * triggering — the skill-creator skill's guidance is emphatic that
  * undertriggering is the common failure mode, so descriptions need
@@ -31,7 +31,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const SKILLS_DIR = resolve(HERE, "..", "..", "plugin", "skills");
 
 /**
- * Minimal YAML frontmatter parser covering the subset claude-sonar
+ * Minimal YAML frontmatter parser covering the subset claude-crap
  * actually uses: top-level string scalars only, no nested objects,
  * no arrays, no quoting edge cases. The full-fat YAML parsers in
  * the ecosystem would add 100+ KB of dependencies for something we
@@ -78,12 +78,12 @@ async function listSkillDirs(): Promise<string[]> {
   return entries.filter((e) => e.isDirectory()).map((e) => e.name);
 }
 
-describe("claude-sonar skills — frontmatter contract", () => {
+describe("claude-crap skills — frontmatter contract", () => {
   it("ships at least one user-invocable skill", async () => {
     const dirs = await listSkillDirs();
     assert.ok(
       dirs.length > 0,
-      "expected at least one skill directory under skills/ — v0.1.1 introduces /claude-sonar:score, /claude-sonar:check-test, /claude-sonar:analyze, /claude-sonar:adopt",
+      "expected at least one skill directory under skills/ — v0.1.1 introduces /claude-crap:score, /claude-crap:check-test, /claude-crap:analyze, /claude-crap:adopt",
     );
   });
 

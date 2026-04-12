@@ -74,7 +74,7 @@ describe("pre-tool-use hook — characterization (benign paths still work)", () 
     const result = await runHook(
       JSON.stringify({
         tool_name: "Read",
-        tool_input: { file_path: "/tmp/claude-sonar-scan-fixture.txt" },
+        tool_input: { file_path: "/tmp/claude-crap-scan-fixture.txt" },
       }),
     );
     assert.equal(result.code, 0, `stderr was: ${result.stderr}`);
@@ -85,7 +85,7 @@ describe("pre-tool-use hook — characterization (benign paths still work)", () 
       JSON.stringify({
         tool_name: "Write",
         tool_input: {
-          file_path: "/tmp/claude-sonar-scan-fixture.txt",
+          file_path: "/tmp/claude-crap-scan-fixture.txt",
           content: "hello world",
         },
       }),

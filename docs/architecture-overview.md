@@ -1,6 +1,6 @@
 # Architecture overview
 
-`claude-sonar` turns Claude Code into a disciplined QA engineer by
+`claude-crap` turns Claude Code into a disciplined QA engineer by
 wrapping every tool call and every task closure with deterministic
 rails. The rails are **not** implemented as extra prompts — they are
 out-of-process scripts and servers that the LLM cannot reason its way
@@ -39,7 +39,7 @@ platform enforces mathematical, unforgiving policies.
 │                                    │ reads                                 │
 │                                    │                                      │
 │   ┌──────────────────────────────────────────────────────────────────┐   │
-│   │                   claude-sonar MCP server (stdio)                │   │
+│   │                   claude-crap MCP server (stdio)                │   │
 │   │                                                                    │   │
 │   │   Tools:                                                           │   │
 │   │     - compute_crap                                                 │   │
@@ -88,7 +88,7 @@ Five subsystems, each deliberately small:
 
 ## Boot sequence
 
-1. User runs `npx @sr-herz/claude-sonar install`, then
+1. User runs `npx @sr-herz/claude-crap install`, then
    `/plugin install <path>` inside Claude Code.
 2. Claude Code reads `.claude-plugin/plugin.json` → discovers the
    hook wiring in `plugin/hooks/hooks.json` and the MCP server launch
@@ -136,7 +136,7 @@ Five subsystems, each deliberately small:
 ```
 
 The single source of truth for findings is the on-disk SARIF file at
-`.claude-sonar/reports/latest.sarif` in the user's workspace. Every
+`.claude-crap/reports/latest.sarif` in the user's workspace. Every
 other view (the dashboard JSON, the `sonar://` resource, the Stop
 gate's verdict, the `score_project` output) is derived from it.
 

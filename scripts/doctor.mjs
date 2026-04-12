@@ -1,6 +1,6 @@
 // @ts-check
 /**
- * `claude-sonar doctor` — full diagnostic pass.
+ * `claude-crap doctor` — full diagnostic pass.
  *
  * Runs every check the install script runs, plus several deeper probes
  * that make sure the plugin can actually function against the current
@@ -19,7 +19,7 @@
  *
  * Exits 0 when all checks pass, 1 when any check fails, and 2 when
  * there are only warnings. This makes it easy to embed in CI:
- * `claude-sonar doctor && echo ok`.
+ * `claude-crap doctor && echo ok`.
  *
  * @module scripts/doctor
  */
@@ -51,7 +51,7 @@ const SUPPORTED_LANGUAGES = /** @type {const} */ ([
  * @returns {Promise<number>}
  */
 export default async function doctor(ctx) {
-  printBanner("claude-sonar :: doctor");
+  printBanner("claude-crap :: doctor");
 
   const checks = [];
   checks.push(await checkNodeVersion());
@@ -74,7 +74,7 @@ export default async function doctor(ctx) {
 
   if (fails > 0) {
     process.stdout.write(
-      `${paint.red(icons.fail)} At least one check failed. Fix the issues above and re-run ${paint.bold("claude-sonar doctor")}.\n`,
+      `${paint.red(icons.fail)} At least one check failed. Fix the issues above and re-run ${paint.bold("claude-crap doctor")}.\n`,
     );
     return 1;
   }
@@ -84,7 +84,7 @@ export default async function doctor(ctx) {
     );
     return 2;
   }
-  process.stdout.write(`${paint.green(icons.ok)} All checks passed. claude-sonar is ready.\n`);
+  process.stdout.write(`${paint.green(icons.ok)} All checks passed. claude-crap is ready.\n`);
   return 0;
 }
 
@@ -96,7 +96,7 @@ async function checkNodeVersion() {
     return {
       status: "fail",
       label: `Node.js runtime (${raw})`,
-      detail: `claude-sonar requires Node.js ≥ 20.0.0`,
+      detail: `claude-crap requires Node.js ≥ 20.0.0`,
     };
   }
   return { status: "ok", label: `Node.js runtime (${raw})` };
@@ -200,7 +200,7 @@ async function checkHooksExecutable(pluginRoot) {
       label: `Hooks are executable`,
       detail:
         `${notExec.length} hook(s) lack the executable bit: ${notExec.join(", ")}. ` +
-        `Run \`claude-sonar install\` to fix.`,
+        `Run \`claude-crap install\` to fix.`,
     };
   }
   return { status: "ok", label: `Hooks are executable (4 checked)` };
@@ -302,7 +302,7 @@ async function checkDashboardPort() {
  * @returns {Promise<import("./lib/cli-ui.mjs").StepResult>}
  */
 async function checkReportsWritable(workspace) {
-  const dir = resolve(workspace, ".claude-sonar", "reports");
+  const dir = resolve(workspace, ".claude-crap", "reports");
   try {
     await fs.mkdir(dir, { recursive: true });
     // Try to write a tiny probe file and then immediately unlink it.

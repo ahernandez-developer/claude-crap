@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // @ts-check
 /**
- * claude-sonar :: SessionStart hook — baseline context seeder.
+ * claude-crap :: SessionStart hook — baseline context seeder.
  *
  * Runs once when Claude Code starts a new interactive session with this
  * plugin active. Its purpose is to fix the agent's opening mental model
@@ -42,15 +42,15 @@ import { evaluateQualityGate, loadQualityGateConfig } from "./lib/quality-gate.m
 function renderBriefing(config, verdict) {
   const { summary } = verdict;
   return [
-    "## claude-sonar session briefing",
+    "## claude-crap session briefing",
     "",
-    "This session is running under the claude-sonar plugin. You are bound by:",
+    "This session is running under the claude-crap plugin. You are bound by:",
     "",
     "- **Golden Rule** — do not write functional code until a characterization test",
     "  pins the current behavior.",
     "- **Hook contract** — PreToolUse can abort with exit 2, PostToolUse emits",
     "  warnings, Stop / SubagentStop enforce the quality gate.",
-    "- **Deterministic engines** — anchor decisions in the claude-sonar MCP tools",
+    "- **Deterministic engines** — anchor decisions in the claude-crap MCP tools",
     "  (`compute_crap`, `compute_tdr`, `analyze_file_ast`, `ingest_sarif`,",
     "  `require_test_harness`) rather than in speculative reasoning.",
     "",
@@ -87,13 +87,13 @@ async function main() {
     // If we cannot produce a verdict (e.g. MCP server not built yet),
     // fail open: write a stripped briefing so the session still starts.
     process.stderr.write(
-      `[claude-sonar] SessionStart: could not evaluate baseline: ${/** @type {Error} */ (err).message}\n`,
+      `[claude-crap] SessionStart: could not evaluate baseline: ${/** @type {Error} */ (err).message}\n`,
     );
     process.stdout.write(
       [
-        "## claude-sonar session briefing",
+        "## claude-crap session briefing",
         "",
-        "claude-sonar is active but the baseline quality gate could not run.",
+        "claude-crap is active but the baseline quality gate could not run.",
         "Run `cd src/mcp-server && npm run build` to enable deterministic metrics.",
         "The Golden Rule still applies: no functional code without a prior test.",
       ].join("\n") + "\n",

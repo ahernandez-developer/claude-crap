@@ -96,7 +96,7 @@ describe("computeProjectScore", () => {
   let workspace = "";
 
   before(async () => {
-    workspace = await mkdtemp(join(tmpdir(), "claude-sonar-score-"));
+    workspace = await mkdtemp(join(tmpdir(), "claude-crap-score-"));
   });
 
   after(async () => {
@@ -224,7 +224,7 @@ describe("renderProjectScoreMarkdown", () => {
   let workspace = "";
 
   before(async () => {
-    workspace = await mkdtemp(join(tmpdir(), "claude-sonar-score-md-"));
+    workspace = await mkdtemp(join(tmpdir(), "claude-crap-score-md-"));
   });
 
   after(async () => {
@@ -237,7 +237,7 @@ describe("renderProjectScoreMarkdown", () => {
     ]);
     const s = score(store, workspace);
     const md = renderProjectScoreMarkdown(s);
-    assert.match(md, /## claude-sonar :: project score/);
+    assert.match(md, /## claude-crap :: project score/);
     assert.match(md, /\*\*Overall: C\*\*/);
     assert.match(md, /Dashboard:.*127\.0\.0\.1:5117/);
     assert.match(md, /Report:.*latest\.sarif/);

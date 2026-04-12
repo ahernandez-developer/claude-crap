@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * claude-sonar MCP server — entrypoint.
+ * claude-crap MCP server — entrypoint.
  *
  * Transport: stdio. The server is launched by `.mcp.json` with the
  * arguments `--transport stdio` and it never opens sockets or listens
@@ -42,7 +42,7 @@ import pino from "pino";
 import { adaptScannerOutput, type KnownScanner } from "./adapters/index.js";
 import { TreeSitterEngine } from "./ast/tree-sitter-engine.js";
 import type { SupportedLanguage } from "./ast/language-config.js";
-import { loadConfig, type SonarConfig } from "./config.js";
+import { loadConfig, type CrapConfig } from "./config.js";
 import { startDashboard, type DashboardHandle } from "./dashboard/server.js";
 import { computeCrap } from "./metrics/crap.js";
 import {
@@ -54,7 +54,7 @@ import { computeTdr, classifyTdr } from "./metrics/tdr.js";
 import { estimateWorkspaceLoc } from "./metrics/workspace-walker.js";
 import { SarifStore, type PersistedSarif } from "./sarif/sarif-store.js";
 import { validateSarifDocument } from "./sarif/sarif-validator.js";
-import { loadSonarConfig, SonarConfigError } from "./sonar-config.js";
+import { loadCrapConfig, CrapConfigError } from "./crap-config.js";
 import { findTestFile } from "./tools/test-harness.js";
 import { resolveWithinWorkspace } from "./workspace-guard.js";
 import {
@@ -71,7 +71,7 @@ import {
 // Anything the server logs MUST go to stderr (fd 2) to avoid corrupting
 // the wire format. We configure pino explicitly to write to fd 2.
 const logger = pino(
-  { level: process.env.CLAUDE_SONAR_LOG_LEVEL ?? "info" },
+  { level: process.env.CLAUDE_CRAP_LOG_LEVEL ?? "info" },
   pino.destination(2),
 );
 
@@ -86,7 +86,7 @@ async function main(): Promise<void> {
   const config = loadConfig();
   logger.info(
     { config: { ...config, pluginRoot: "<redacted>" } },
-    "claude-sonar MCP server starting",
+    "claude-crap MCP server starting",
   );
 
   // Long-lived engines. Created once at boot and reused for every call.
@@ -114,7 +114,7 @@ async function main(): Promise<void> {
   } catch (err) {
     logger.warn(
       { err: (err as Error).message, port: config.dashboardPort },
-      "claude-sonar dashboard failed to start — continuing without it",
+      "claude-crap dashboard failed to start — continuing without it",
     );
   }
   // Make sure the dashboard is closed when the process exits so the TCP
@@ -145,7 +145,7 @@ async function main(): Promise<void> {
 
   const server = new Server(
     {
-      name: "claude-sonar",
+      name: "claude-crap",
       version: "0.1.0",
     },
     {
@@ -533,7 +533,7 @@ async function main(): Promise<void> {
       }
 
       default:
-        throw new Error(`[claude-sonar] Unknown tool: ${name}`);
+        throw new Error(`[claude-crap] Unknown tool: ${name}`);
     }
   });
 
@@ -583,12 +583,12 @@ async function main(): Promise<void> {
         ],
       };
     }
-    throw new Error(`[claude-sonar] Unknown resource URI: ${uri}`);
+    throw new Error(`[claude-crap] Unknown resource URI: ${uri}`);
   });
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  logger.info("claude-sonar MCP server ready (stdio)");
+  logger.info("claude-crap MCP server ready (stdio)");
 }
 
 /**
@@ -599,7 +599,7 @@ async function main(): Promise<void> {
  * `resolveStrictness` helper in `hooks/stop-quality-gate.mjs`.
  *
  * @param workspaceRoot Absolute path the loader should probe for
- *                      `.claude-sonar.json`.
+ *                      `.claude-crap.json`.
  * @param logger        Pino logger used to surface recoverable
  *                      config errors.
  * @returns             The resolved strictness, or `"strict"` on
@@ -610,9 +610,9 @@ function safeLoadStrictness(
   logger: import("pino").Logger,
 ): "strict" | "warn" | "advisory" {
   try {
-    return loadSonarConfig({ workspaceRoot }).strictness;
+    return loadCrapConfig({ workspaceRoot }).strictness;
   } catch (err) {
-    if (err instanceof SonarConfigError) {
+    if (err instanceof CrapConfigError) {
       logger.warn(
         { err: err.message },
         "score_project: invalid sonar config, falling back to strict",
@@ -636,7 +636,7 @@ function safeLoadStrictness(
  * @param sarifStore Live SARIF store used to read the latest findings.
  */
 async function buildMetricsSnapshot(
-  config: SonarConfig,
+  config: CrapConfig,
   sarifStore: SarifStore,
 ): Promise<Record<string, unknown>> {
   const findings = sarifStore.list();
@@ -688,7 +688,7 @@ main().catch((err) => {
   // so that no lint suppression is needed and so that no buffering layer
   // can swallow the message. A non-zero exit code causes Claude Code to
   // surface the failure in its MCP-server diagnostics.
-  process.stderr.write(`[claude-sonar] fatal error during startup: ${String(err)}\n`);
+  process.stderr.write(`[claude-crap] fatal error during startup: ${String(err)}\n`);
   if (err instanceof Error && err.stack) {
     process.stderr.write(err.stack + "\n");
   }

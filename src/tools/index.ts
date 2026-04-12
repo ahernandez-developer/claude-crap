@@ -1,6 +1,6 @@
 /**
  * Public SDK entry point for the tool backends that sit behind
- * the `claude-sonar` MCP server.
+ * the `claude-crap` MCP server.
  *
  * These are the same pure functions the MCP server calls into — the
  * server layer just wraps them in JSON-RPC. Downstream consumers can
@@ -14,7 +14,7 @@
  *   findTestFile,
  *   isTestFile,
  *   candidatePaths,
- * } from "@sr-herz/claude-sonar/tools";
+ * } from "@sr-herz/claude-crap/tools";
  * ```
  *
  * @module tools

@@ -1,5 +1,5 @@
 /**
- * Deterministic configuration loader for the claude-sonar MCP server.
+ * Deterministic configuration loader for the claude-crap MCP server.
  *
  * Every tunable knob is read from environment variables that are injected
  * by `.mcp.json` at server startup. Those variables are themselves derived
@@ -16,7 +16,7 @@
  */
 
 /**
- * Maintainability rating letter grades used throughout claude-sonar.
+ * Maintainability rating letter grades used throughout claude-crap.
  *
  * The ordering is strict: A is best, E is worst. Callers that need to
  * compare two ratings should use {@link ratingToRank} from `metrics/tdr.ts`
@@ -29,7 +29,7 @@ export type MaintainabilityRating = "A" | "B" | "C" | "D" | "E";
  * MCP server. Fields are `readonly` so that downstream code cannot mutate
  * configuration at runtime — any change must go through a server restart.
  */
-export interface SonarConfig {
+export interface CrapConfig {
   /** Absolute path to the plugin root on disk. Defaults to `process.cwd()`. */
   readonly pluginRoot: string;
   /** Directory (relative to the workspace) where consolidated SARIF reports are written. */
@@ -62,7 +62,7 @@ function parseNumber(name: string, raw: string | undefined, fallback: number): n
   if (raw === undefined || raw === "") return fallback;
   const value = Number(raw);
   if (!Number.isFinite(value)) {
-    throw new Error(`[claude-sonar] Env ${name}="${raw}" is not a finite number`);
+    throw new Error(`[claude-crap] Env ${name}="${raw}" is not a finite number`);
   }
   return value;
 }
@@ -81,29 +81,29 @@ function parseRating(raw: string | undefined, fallback: MaintainabilityRating): 
   if (!raw) return fallback;
   const normalized = raw.trim().toUpperCase();
   if (!["A", "B", "C", "D", "E"].includes(normalized)) {
-    throw new Error(`[claude-sonar] TDR_MAX_RATING="${raw}" must be one of A, B, C, D, E`);
+    throw new Error(`[claude-crap] TDR_MAX_RATING="${raw}" must be one of A, B, C, D, E`);
   }
   return normalized as MaintainabilityRating;
 }
 
 /**
- * Build the complete {@link SonarConfig} from the current process environment.
+ * Build the complete {@link CrapConfig} from the current process environment.
  *
  * This should be called exactly once at server startup. Subsequent callers
- * that need configuration should accept a `SonarConfig` parameter instead
+ * that need configuration should accept a `CrapConfig` parameter instead
  * of re-reading from `process.env`, so that tests can inject custom values.
  *
  * @returns A fully validated, immutable configuration object.
  * @throws  When any environment variable is present but malformed.
  */
-export function loadConfig(): SonarConfig {
+export function loadConfig(): CrapConfig {
   return {
-    pluginRoot: process.env.CLAUDE_SONAR_PLUGIN_ROOT ?? process.cwd(),
-    sarifOutputDir: process.env.CLAUDE_SONAR_SARIF_OUTPUT_DIR ?? ".claude-sonar/reports",
-    crapThreshold: parseNumber("CLAUDE_SONAR_CRAP_THRESHOLD", process.env.CLAUDE_SONAR_CRAP_THRESHOLD, 30),
-    cyclomaticMax: parseNumber("CLAUDE_SONAR_CYCLOMATIC_MAX", process.env.CLAUDE_SONAR_CYCLOMATIC_MAX, 15),
-    tdrMaxRating: parseRating(process.env.CLAUDE_SONAR_TDR_MAX_RATING, "C"),
-    minutesPerLoc: parseNumber("CLAUDE_SONAR_MINUTES_PER_LOC", process.env.CLAUDE_SONAR_MINUTES_PER_LOC, 30),
-    dashboardPort: parseNumber("CLAUDE_SONAR_DASHBOARD_PORT", process.env.CLAUDE_SONAR_DASHBOARD_PORT, 5117),
+    pluginRoot: process.env.CLAUDE_CRAP_PLUGIN_ROOT ?? process.cwd(),
+    sarifOutputDir: process.env.CLAUDE_CRAP_SARIF_OUTPUT_DIR ?? ".claude-crap/reports",
+    crapThreshold: parseNumber("CLAUDE_CRAP_CRAP_THRESHOLD", process.env.CLAUDE_CRAP_CRAP_THRESHOLD, 30),
+    cyclomaticMax: parseNumber("CLAUDE_CRAP_CYCLOMATIC_MAX", process.env.CLAUDE_CRAP_CYCLOMATIC_MAX, 15),
+    tdrMaxRating: parseRating(process.env.CLAUDE_CRAP_TDR_MAX_RATING, "C"),
+    minutesPerLoc: parseNumber("CLAUDE_CRAP_MINUTES_PER_LOC", process.env.CLAUDE_CRAP_MINUTES_PER_LOC, 30),
+    dashboardPort: parseNumber("CLAUDE_CRAP_DASHBOARD_PORT", process.env.CLAUDE_CRAP_DASHBOARD_PORT, 5117),
   };
 }

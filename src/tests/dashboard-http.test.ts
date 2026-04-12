@@ -27,7 +27,7 @@ describe("dashboard HTTP characterization test", { skip: !serverBuilt }, () => {
   let dashboardPromise: Promise<string>;
 
   before(async () => {
-    workspace = await mkdtemp(join(tmpdir(), "claude-sonar-dashboard-"));
+    workspace = await mkdtemp(join(tmpdir(), "claude-crap-dashboard-"));
 
     const dashboardPort = 5700 + Math.floor(Math.random() * 300);
 
@@ -35,9 +35,9 @@ describe("dashboard HTTP characterization test", { skip: !serverBuilt }, () => {
       stdio: ["pipe", "pipe", "pipe"],
       env: {
         ...process.env,
-        CLAUDE_SONAR_LOG_LEVEL: "info",
-        CLAUDE_SONAR_PLUGIN_ROOT: workspace,
-        CLAUDE_SONAR_DASHBOARD_PORT: String(dashboardPort),
+        CLAUDE_CRAP_LOG_LEVEL: "info",
+        CLAUDE_CRAP_PLUGIN_ROOT: workspace,
+        CLAUDE_CRAP_DASHBOARD_PORT: String(dashboardPort),
       },
     });
 
@@ -52,7 +52,7 @@ describe("dashboard HTTP characterization test", { skip: !serverBuilt }, () => {
           if (!line.trim()) continue;
           try {
             const parsed = JSON.parse(line);
-            if (parsed.msg === "claude-sonar dashboard listening" && parsed.url) {
+            if (parsed.msg === "claude-crap dashboard listening" && parsed.url) {
               resolvePromise(parsed.url);
             }
           } catch {

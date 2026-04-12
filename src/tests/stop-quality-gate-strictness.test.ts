@@ -5,9 +5,9 @@
  * The test spawns `hooks/stop-quality-gate.mjs` as a subprocess with
  * a hand-crafted fixture workspace containing:
  *
- *   - `.claude-sonar/reports/latest.sarif` — one error-level finding
+ *   - `.claude-crap/reports/latest.sarif` — one error-level finding
  *     so the gate has a reason to fail.
- *   - (optional) `.claude-sonar.json` — exercises file-based config.
+ *   - (optional) `.claude-crap.json` — exercises file-based config.
  *   - One small `.ts` file so the workspace walker returns a non-zero
  *     LOC denominator and TDR math does not divide by one.
  *
@@ -104,8 +104,8 @@ function runStopHook(
  * denominator for the TDR computation.
  */
 async function createFailingFixture(): Promise<string> {
-  const workspace = await mkdtemp(join(tmpdir(), "claude-sonar-strict-"));
-  const reportsDir = join(workspace, ".claude-sonar", "reports");
+  const workspace = await mkdtemp(join(tmpdir(), "claude-crap-strict-"));
+  const reportsDir = join(workspace, ".claude-crap", "reports");
   await fs.mkdir(reportsDir, { recursive: true });
 
   // One error-level finding guarantees the SONAR-GATE-ERRORS policy fails.
@@ -113,7 +113,7 @@ async function createFailingFixture(): Promise<string> {
     version: "2.1.0",
     runs: [
       {
-        tool: { driver: { name: "claude-sonar-fixture", version: "0.0.0" } },
+        tool: { driver: { name: "claude-crap-fixture", version: "0.0.0" } },
         results: [
           {
             ruleId: "FIXTURE-ERR-001",
@@ -128,7 +128,7 @@ async function createFailingFixture(): Promise<string> {
               },
             ],
             properties: {
-              sourceTool: "claude-sonar-fixture",
+              sourceTool: "claude-crap-fixture",
               effortMinutes: 90,
             },
           },
@@ -169,24 +169,24 @@ describe(
 
     it("default (no env, no file) → exit 2 + stderr box (strict is the default)", async () => {
       const result = await runStopHook(workspace, {
-        CLAUDE_SONAR_STRICTNESS: undefined,
+        CLAUDE_CRAP_STRICTNESS: undefined,
       });
       assert.equal(result.code, 2, `stderr was: ${result.stderr}`);
       assert.match(result.stderr, /Stop quality gate BLOCKED/);
       assert.match(result.stderr, /SONAR-GATE-ERRORS/);
     });
 
-    it("CLAUDE_SONAR_STRICTNESS=strict → exit 2 + stderr box", async () => {
+    it("CLAUDE_CRAP_STRICTNESS=strict → exit 2 + stderr box", async () => {
       const result = await runStopHook(workspace, {
-        CLAUDE_SONAR_STRICTNESS: "strict",
+        CLAUDE_CRAP_STRICTNESS: "strict",
       });
       assert.equal(result.code, 2);
       assert.match(result.stderr, /Stop quality gate BLOCKED/);
     });
 
-    it("CLAUDE_SONAR_STRICTNESS=warn → exit 0 + full verdict on stdout", async () => {
+    it("CLAUDE_CRAP_STRICTNESS=warn → exit 0 + full verdict on stdout", async () => {
       const result = await runStopHook(workspace, {
-        CLAUDE_SONAR_STRICTNESS: "warn",
+        CLAUDE_CRAP_STRICTNESS: "warn",
       });
       assert.equal(result.code, 0, `stderr was: ${result.stderr}`);
       // The full verdict must still reach the hook transcript so the
@@ -195,9 +195,9 @@ describe(
       assert.match(result.stdout, /SONAR-GATE-ERRORS/);
     });
 
-    it("CLAUDE_SONAR_STRICTNESS=advisory → exit 0 + one-line summary on stdout", async () => {
+    it("CLAUDE_CRAP_STRICTNESS=advisory → exit 0 + one-line summary on stdout", async () => {
       const result = await runStopHook(workspace, {
-        CLAUDE_SONAR_STRICTNESS: "advisory",
+        CLAUDE_CRAP_STRICTNESS: "advisory",
       });
       assert.equal(result.code, 0, `stderr was: ${result.stderr}`);
       assert.match(result.stdout, /Stop quality gate ADVISORY/);
@@ -208,12 +208,12 @@ describe(
       assert.doesNotMatch(result.stdout, /policy failure\(s\)/);
     });
 
-    it(".claude-sonar.json with strictness='warn' is honored when env is unset", async () => {
-      const configPath = join(workspace, ".claude-sonar.json");
+    it(".claude-crap.json with strictness='warn' is honored when env is unset", async () => {
+      const configPath = join(workspace, ".claude-crap.json");
       await fs.writeFile(configPath, JSON.stringify({ strictness: "warn" }), "utf8");
       try {
         const result = await runStopHook(workspace, {
-          CLAUDE_SONAR_STRICTNESS: undefined,
+          CLAUDE_CRAP_STRICTNESS: undefined,
         });
         assert.equal(result.code, 0, `stderr was: ${result.stderr}`);
         assert.match(result.stdout, /Stop quality gate WARNING/);
@@ -222,8 +222,8 @@ describe(
       }
     });
 
-    it("env variable wins over .claude-sonar.json even when the file disagrees", async () => {
-      const configPath = join(workspace, ".claude-sonar.json");
+    it("env variable wins over .claude-crap.json even when the file disagrees", async () => {
+      const configPath = join(workspace, ".claude-crap.json");
       await fs.writeFile(
         configPath,
         JSON.stringify({ strictness: "advisory" }),
@@ -231,7 +231,7 @@ describe(
       );
       try {
         const result = await runStopHook(workspace, {
-          CLAUDE_SONAR_STRICTNESS: "strict",
+          CLAUDE_CRAP_STRICTNESS: "strict",
         });
         assert.equal(result.code, 2, `stderr was: ${result.stderr}`);
         assert.match(result.stderr, /Stop quality gate BLOCKED/);

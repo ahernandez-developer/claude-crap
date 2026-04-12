@@ -11,8 +11,8 @@
  *
  * F-A01-01: the original guard in `src/index.ts` used a naive
  * `candidate.startsWith(workspace)` check, which suffers from prefix
- * confusion — for a workspace like `/Users/x/claude-sonar`, an
- * absolute input path such as `/Users/x/claude-sonar-evil/secret.ts`
+ * confusion — for a workspace like `/Users/x/claude-crap`, an
+ * absolute input path such as `/Users/x/claude-crap-evil/secret.ts`
  * would pass the check because the two share the literal prefix up
  * to the final segment. This module replaces that check with a
  * separator-aware comparison: the candidate is only accepted if it
@@ -57,7 +57,7 @@ export function resolveWithinWorkspace(workspaceRoot: string, filePath: string):
   const candidate = isAbsolute(filePath) ? resolve(filePath) : resolve(workspace, filePath);
   if (candidate !== workspace && !candidate.startsWith(workspace + sep)) {
     throw new Error(
-      `[claude-sonar] Refusing to access '${filePath}' — path escapes the workspace root`,
+      `[claude-crap] Refusing to access '${filePath}' — path escapes the workspace root`,
     );
   }
   return candidate;

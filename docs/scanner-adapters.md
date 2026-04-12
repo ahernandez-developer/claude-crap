@@ -1,6 +1,6 @@
 # Scanner adapters
 
-claude-sonar ships four per-scanner adapters that convert a scanner's
+claude-crap ships four per-scanner adapters that convert a scanner's
 native output into a normalized SARIF 2.1.0 document the `SarifStore`
 can ingest directly. Every adapter enriches each finding with a
 stable `effortMinutes` value on the `properties` bag so the Stop
@@ -27,7 +27,7 @@ From inside an MCP session, call the `ingest_scanner_output` tool:
 From TypeScript or Node.js code, import the dispatcher from the SDK:
 
 ```ts
-import { adaptScannerOutput } from "@sr-herz/claude-sonar/adapters";
+import { adaptScannerOutput } from "@sr-herz/claude-crap/adapters";
 
 const result = adaptScannerOutput("eslint", rawJsonFromEslint);
 // result.document    → PersistedSarif (SARIF 2.1.0)

@@ -58,7 +58,7 @@ describe("SarifStore", () => {
   let workspace = "";
 
   before(async () => {
-    workspace = await mkdtemp(join(tmpdir(), "claude-sonar-test-"));
+    workspace = await mkdtemp(join(tmpdir(), "claude-crap-test-"));
   });
 
   after(async () => {
@@ -184,7 +184,7 @@ describe("SarifStore", () => {
         },
         // Well-formed: must survive.
         {
-          tool: { driver: { name: "claude-sonar", version: "0.1.0" } },
+          tool: { driver: { name: "claude-crap", version: "0.1.0" } },
           results: [
             {
               ruleId: "GOOD-001",

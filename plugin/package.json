@@ -1,8 +1,8 @@
 {
-  "name": "@sr-herz/claude-sonar-plugin",
+  "name": "@sr-herz/claude-crap-plugin",
   "version": "0.1.2",
   "private": true,
-  "description": "Runtime dependencies for the claude-sonar plugin bundle",
+  "description": "Runtime dependencies for the claude-crap plugin bundle",
   "type": "module",
   "dependencies": {
     "@fastify/static": "^8.0.3",
