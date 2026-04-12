@@ -2,9 +2,10 @@
  * End-to-end integration tests for the compiled MCP server.
  *
  * Unlike the rest of the test suite (which exercises pure engine
- * modules in isolation), these tests spawn the real `dist/index.js`
- * as a child process, speak JSON-RPC to it over stdio, and verify
- * that the full server works when it is actually running:
+ * modules in isolation), these tests spawn the bundled MCP server
+ * (`plugin/bundle/mcp-server.mjs`) as a child process, speak
+ * JSON-RPC to it over stdio, and verify that the full server works
+ * when it is actually running:
  *
  *   - `initialize` + `notifications/initialized` handshake
  *   - `tools/list` returns every registered tool with its schema
@@ -22,9 +23,10 @@
  * error-boundary shaping all stay covered even though every
  * individual engine already has its own unit tests.
  *
- * The test skips cleanly when `dist/index.js` does not exist — that
- * happens during `tsx`-based dev runs before a build has been done.
- * `npm test` builds via postinstall or can be preceded by `npm run build`.
+ * The test skips cleanly when the bundle does not exist — that
+ * happens during `tsx`-based dev runs before `npm run build:plugin`
+ * has been run. `npm test` builds via postinstall or can be preceded
+ * by `npm run build:plugin`.
  *
  * @module tests/integration/mcp-server.integration.test
  */
@@ -42,7 +44,9 @@ import { fileURLToPath } from "node:url";
 // regardless of whether it is run via tsx or from `dist/tests/`.
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PLUGIN_ROOT = resolve(HERE, "..", "..", "..");
-const SERVER_ENTRY = join(PLUGIN_ROOT, "dist", "index.js");
+const SERVER_ENTRY = process.env.SONAR_MCP_ENTRY
+  ? resolve(process.env.SONAR_MCP_ENTRY)
+  : join(PLUGIN_ROOT, "plugin", "bundle", "mcp-server.mjs");
 
 // Synchronously probe for the compiled server entry at module load
 // time so we can pass `{ skip }` to describe(). Passing an async

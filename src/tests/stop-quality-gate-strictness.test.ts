@@ -37,15 +37,17 @@ import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PLUGIN_ROOT = resolve(HERE, "..", "..");
-const HOOK_PATH = join(PLUGIN_ROOT, "hooks", "stop-quality-gate.mjs");
-const TDR_ENTRY = join(PLUGIN_ROOT, "dist", "metrics", "tdr.js");
+const HOOK_PATH = join(PLUGIN_ROOT, "plugin", "hooks", "stop-quality-gate.mjs");
+const TDR_ENTRY = process.env.SONAR_TDR_ENTRY
+  ? resolve(process.env.SONAR_TDR_ENTRY)
+  : join(PLUGIN_ROOT, "plugin", "bundle", "tdr-engine.mjs");
 
-let distBuilt = false;
+let bundleBuilt = false;
 try {
   statSync(TDR_ENTRY);
-  distBuilt = true;
+  bundleBuilt = true;
 } catch {
-  distBuilt = false;
+  bundleBuilt = false;
 }
 
 interface HookResult {
@@ -153,7 +155,7 @@ async function createFailingFixture(): Promise<string> {
 
 describe(
   "stop-quality-gate hook — strictness matrix",
-  { skip: !distBuilt },
+  { skip: !bundleBuilt },
   () => {
     let workspace = "";
 

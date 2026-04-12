@@ -33,7 +33,7 @@ platform enforces mathematical, unforgiving policies.
 │                                                                           │
 │   ┌───────────────────────────────────────────────────────────────────┐  │
 │   │                   Stop / SubagentStop quality gate                │  │
-│   │   (CRAP + TDR + SARIF errors checked via hooks/lib/quality-gate) │  │
+│   │   (CRAP + TDR + SARIF errors checked via plugin/hooks/lib/quality-gate) │  │
 │   └───────────────────────────────────────────────────────────────────┘  │
 │                                    ▲                                      │
 │                                    │ reads                                 │
@@ -63,12 +63,14 @@ platform enforces mathematical, unforgiving policies.
 
 Five subsystems, each deliberately small:
 
-1. **Hooks** (`hooks/`) — ~700 lines of plain Node.js. No TypeScript,
+1. **Hooks** (`plugin/hooks/`) — ~700 lines of plain Node.js. No TypeScript,
    no dependencies. Receives a JSON payload on stdin, evaluates a
    handful of pure rules, exits with an appropriate code. Every
    decision travels through stderr into the agent's next turn.
 2. **MCP server** (`src/index.ts` + `src/ast/` + `src/metrics/` +
-   `src/sarif/` + `src/adapters/`) — TypeScript built to `dist/`.
+   `src/sarif/` + `src/adapters/`) — TypeScript source built to
+   `dist/` for the npm library surface and bundled to
+   `plugin/bundle/mcp-server.mjs` for the git plugin distribution.
    Exposes seven stdio-transported tools and two resources. Imports
    never have side effects — only `main()` at the bottom does.
 3. **Dashboard** (`src/dashboard/`) — Fastify HTTP server bound to
@@ -89,22 +91,22 @@ Five subsystems, each deliberately small:
 1. User runs `npx @sr-herz/claude-sonar install`, then
    `/plugin install <path>` inside Claude Code.
 2. Claude Code reads `.claude-plugin/plugin.json` → discovers the
-   hook wiring in `hooks/hooks.json` and the MCP server launch
+   hook wiring in `plugin/hooks/hooks.json` and the MCP server launch
    command in `.mcp.json`.
 3. On the next Claude Code session, two things happen in parallel:
    - The `SessionStart` hook runs, collects baseline metrics via
-     `hooks/lib/quality-gate.mjs`, and prints a Markdown briefing to
+     `plugin/hooks/lib/quality-gate.mjs`, and prints a Markdown briefing to
      stdout that Claude Code injects into the agent's opening context.
-   - Claude Code spawns `node ./dist/index.js --transport stdio`,
-     which boots the MCP server and (in the same process) the
-     Fastify dashboard on `127.0.0.1:5117`.
+   - Claude Code spawns `node plugin/bundle/mcp-server.mjs --transport stdio`
+     (as declared in `plugin/.mcp.json`), which boots the MCP server
+     and (in the same process) the Fastify dashboard on `127.0.0.1:5117`.
 4. Every subsequent `Write` / `Edit` / `MultiEdit` / `NotebookEdit` /
-   `Bash` call goes through `hooks/pre-tool-use.mjs` first. Most of
+   `Bash` call goes through `plugin/hooks/pre-tool-use.mjs` first. Most of
    the time the hook exits 0. When it exits 2, Claude Code forwards
    the stderr text to the agent, which has to revise its approach.
-5. After any successful mutation, `hooks/post-tool-use.mjs` runs and
+5. After any successful mutation, `plugin/hooks/post-tool-use.mjs` runs and
    emits warnings (test harness missing, TODO markers, suppressions).
-6. When the agent announces it is done, `hooks/stop-quality-gate.mjs`
+6. When the agent announces it is done, `plugin/hooks/stop-quality-gate.mjs`
    reads the consolidated SARIF report, runs the bounded LOC walker,
    and evaluates the Stop policies. If anything fails, the gate
    returns exit 2 and Claude Code tells the agent to keep working.

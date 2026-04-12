@@ -228,7 +228,7 @@ navigate there if you prefer browsing by chapter.
 - [Changelog](./CHANGELOG.md) — Keep-a-Changelog-formatted release
   history, with the security subsection documenting every OWASP
   Top 10:2025 finding that shipped fixed in `v0.1.0`.
-- [Agent contract (CLAUDE.md)](./CLAUDE.md) — the Golden Rule that is
+- [Agent contract (CLAUDE.md)](./plugin/CLAUDE.md) — the Golden Rule that is
   auto-injected into every Claude Code session where the plugin is
   active.
 
@@ -238,7 +238,7 @@ navigate there if you prefer browsing by chapter.
 
 **Core components:**
 
-1. **PreToolUse gatekeeper** (`hooks/pre-tool-use.mjs`). A
+1. **PreToolUse gatekeeper** (`plugin/hooks/pre-tool-use.mjs`). A
    synchronous, zero-I/O speed bump that inspects the proposed
    `tool_input` before the tool runs. Sensitive paths, destructive
    Bash, hardcoded secrets, and path-traversal attempts trigger
@@ -249,7 +249,7 @@ navigate there if you prefer browsing by chapter.
    any failure to evaluate the rules fails **closed**, so the gate
    cannot be bypassed by crashing a rule.
 
-2. **PostToolUse verifier** (`hooks/post-tool-use.mjs`). Runs
+2. **PostToolUse verifier** (`plugin/hooks/post-tool-use.mjs`). Runs
    immediately after a file-mutating tool call and scans the
    just-written artifact for a missing test harness, inline
    suppression markers (`eslint-disable`, `@ts-ignore`, `# nosec`,
@@ -258,7 +258,7 @@ navigate there if you prefer browsing by chapter.
    will enforce the strict verdict later.
 
 3. **Stop / SubagentStop quality gate**
-   (`hooks/stop-quality-gate.mjs`). When the agent declares a task
+   (`plugin/hooks/stop-quality-gate.mjs`). When the agent declares a task
    done, this hook reads the consolidated SARIF report, computes
    CRAP / TDR / reliability / security ratings against the entire
    workspace, and refuses to let the task close if any metric is
@@ -398,7 +398,7 @@ per-scanner effort tables — live in
 ### Windows Setup Notes
 
 On native Windows (no WSL), the hook scripts rely on a POSIX shell.
-If you hit `'./hooks/pre-tool-use.mjs' is not recognized as an
+If you hit `'./plugin/hooks/pre-tool-use.mjs' is not recognized as an
 internal or external command`, install [Git for Windows](https://gitforwindows.org/)
 and make sure its `usr/bin` directory is on your `PATH` so `bash`
 and `env` are available to Node's `child_process.spawn`. Using WSL

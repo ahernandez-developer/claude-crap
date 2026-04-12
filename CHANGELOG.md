@@ -5,6 +5,60 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] - 2026-04-12
+
+Plugin distribution refactored from npm-source to git-source. Claude
+Desktop's Directory view now renders Skills / Hooks / Connectors counts
+for `claude-sonar`, matching the pattern used by `claude-mem` and every
+plugin in the official Anthropic marketplace.
+
+### Added
+
+- **`plugin/` subdirectory** — self-contained plugin artifact committed
+  to git. Contains `.claude-plugin/plugin.json`, `.mcp.json`, `CLAUDE.md`,
+  `hooks/`, `skills/`, `bundle/`, and a minimal `package.json` declaring
+  only the un-bundleable native/WASM runtime deps.
+- **`scripts/bundle-plugin.mjs`** — esbuild bundler that produces
+  `plugin/bundle/mcp-server.mjs` (the MCP server entry) and
+  `plugin/bundle/tdr-engine.mjs` (standalone TDR classifier for hooks).
+  Also copies dashboard static assets into `plugin/bundle/dashboard/public/`.
+- **`npm run build:plugin`** script in `package.json`.
+- **Dashboard HTTP characterization test** (`src/tests/dashboard-http.test.ts`)
+  that boots the bundled MCP server and verifies the dashboard responds
+  with 200 OK + HTML and the `/api/score` endpoint returns valid JSON.
+- **CI bundle drift check** — `.github/workflows/ci.yml` now rebuilds
+  `plugin/bundle/` and fails the PR if the committed bundles are stale.
+
+### Changed
+
+- **Marketplace source** in `.claude-plugin/marketplace.json` changed
+  from `{ source: "npm", package: "@sr-herz/claude-sonar" }` to
+  `"./plugin"`. Claude Desktop can now filesystem-scan the plugin
+  directory from the cloned marketplace repo.
+- **MCP server entry** in `plugin/.mcp.json` changed from
+  `dist/index.js` to `bundle/mcp-server.mjs`.
+- **TDR import** in `plugin/hooks/lib/quality-gate.mjs` changed from
+  `dist/metrics/tdr.js` to `../../bundle/tdr-engine.mjs`.
+- **Integration tests** (`mcp-server.integration.test.ts`,
+  `stop-quality-gate-strictness.test.ts`, `dashboard-http.test.ts`)
+  now default to the bundled entry points and accept `SONAR_MCP_ENTRY` /
+  `SONAR_TDR_ENTRY` env var overrides.
+- **Hooks, skills, CLAUDE.md, .mcp.json** moved from the repo root
+  into `plugin/` via `git mv` (history preserved).
+- **`resolvePublicRoot()`** in `src/dashboard/server.ts` gained a new
+  first-place candidate for the bundle-relative layout.
+- **Diagnostic scripts** (`doctor.mjs`, `status.mjs`, `bug-report.mjs`,
+  `install.mjs`) updated to check both `dist/` and `plugin/bundle/`.
+- **`prepublishOnly`** now runs `npm run build:plugin` alongside `tsc`.
+- **npm library surface preserved** — `main`, `types`, `exports` still
+  point to `dist/`. Both distribution channels coexist (dual-track).
+
+### Fixed
+
+- Directory view in Claude Desktop now shows Skills / Hooks / Connectors
+  counts (previously blank because the npm-source type prevented
+  pre-install filesystem scanning).
+
 ## [0.1.1] - 2026-04-11
 
 First feature release on top of the initial public drop. All the
@@ -15,7 +69,7 @@ Claude Code's slash-command palette.
 
 ### Added
 
-- **Four user-invocable skills** under `skills/` at the plugin root.
+- **Four user-invocable skills** under `plugin/skills/` at the plugin root.
   Each skill is a `SKILL.md` file with YAML frontmatter declaring a
   `name` and a "pushy" `description` (per the `skill-creator` skill's
   guidance on combating undertriggering), and Markdown instructions
@@ -43,7 +97,7 @@ Claude Code's slash-command palette.
     `.claude-sonar.json`. Produces a copy-pasteable JSON snippet and
     a gradual-adoption roadmap.
 - **Frontmatter contract test** at `src/tests/skills-frontmatter.test.ts`
-  validates that every `skills/<name>/SKILL.md` has YAML frontmatter
+  validates that every `plugin/skills/<name>/SKILL.md` has YAML frontmatter
   with a `name` matching the directory, a `description` longer than
   100 characters, and the `use this skill when/whenever ...` trigger
   phrasing that the `skill-creator` guidance recommends. The test
@@ -52,8 +106,8 @@ Claude Code's slash-command palette.
 
 ### Changed
 
-- **`package.json#files` now ships `skills/`** in the npm tarball. The
-  `v0.1.0` tarball did NOT include `skills/` — this is the reason a
+- **`package.json#files` now ships `plugin/skills/`** in the npm tarball. The
+  `v0.1.0` tarball did NOT include `plugin/skills/` — this is the reason a
   new version is mandatory rather than an in-place fix: Claude Code's
   marketplace installs via `npm install @sr-herz/claude-sonar@<version>`,
   not from the git repo, so the SKILL.md files only reach users after
@@ -212,7 +266,7 @@ characterization and attack tests per the Golden Rule in `CLAUDE.md`.
   silently bypass the gatekeeper for workspace-mutating tools. Legacy
   fail-open semantics are preserved for low-risk tools so a broken
   hook does not deadlock read-only operations.
-  (`hooks/pre-tool-use.mjs`, `src/tests/pre-tool-use-hook.test.ts`.)
+  (`plugin/hooks/pre-tool-use.mjs`, `src/tests/pre-tool-use-hook.test.ts`.)
 - **F-A03-01 (HIGH)** — The dashboard no longer fetches Vue from
   `unpkg.com`. Vue 3.5.13 is now vendored locally under
   `src/dashboard/public/vendor/vue.global.prod.js` and the HTML

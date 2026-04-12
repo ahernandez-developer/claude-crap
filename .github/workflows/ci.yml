@@ -46,8 +46,19 @@ jobs:
       - name: Build dist/
         run: npm run build
 
+      - name: Build plugin/bundle/
+        run: npm run build:plugin
+
+      - name: Check for plugin bundle drift
+        run: |
+          if [[ -n $(git status --porcelain plugin/bundle/) ]]; then
+            echo "plugin/bundle drift detected. Please run 'npm run build:plugin' and commit the changes."
+            git status --porcelain plugin/bundle/
+            exit 1
+          fi
+
       - name: Unit and integration tests
-        run: npm test
+        run: SONAR_TDR_ENTRY=plugin/bundle/tdr-engine.mjs npm test
 
       - name: Doctor diagnostic (12 checks)
         run: node ./bin/claude-sonar.mjs doctor
