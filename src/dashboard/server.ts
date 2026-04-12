@@ -39,6 +39,9 @@ import {
   type WorkspaceStats,
 } from "../metrics/score.js";
 import type { SarifStore } from "../sarif/sarif-store.js";
+import type { TreeSitterEngine } from "../ast/tree-sitter-engine.js";
+import { detectLanguageFromPath } from "../ast/language-config.js";
+import { buildFileDetail } from "./file-detail.js";
 
 /**
  * Callback used by the dashboard to refresh workspace LOC stats on
@@ -59,6 +62,8 @@ export interface StartDashboardOptions {
   readonly workspaceStatsProvider: WorkspaceStatsProvider;
   /** Pino logger from the MCP server (writes to stderr). */
   readonly logger: Logger;
+  /** Tree-sitter engine for the /api/complexity endpoint. */
+  readonly astEngine?: TreeSitterEngine;
 }
 
 /**
@@ -114,6 +119,46 @@ export async function startDashboard(options: StartDashboardOptions): Promise<Da
   // /api/sarif — consolidated SARIF 2.1.0 document
   // ------------------------------------------------------------------
   fastify.get("/api/sarif", async () => sarifStore.toSarifDocument());
+
+  // ------------------------------------------------------------------
+  // /api/complexity — top complex functions across the workspace
+  // ------------------------------------------------------------------
+  fastify.get("/api/complexity", async () => {
+    if (!options.astEngine) {
+      return { threshold: config.cyclomaticMax, totalFunctions: 0, violationCount: 0, topFunctions: [] };
+    }
+    return buildComplexityReport(config, options.astEngine, logger);
+  });
+
+  // ------------------------------------------------------------------
+  // /api/file-detail — per-file source, metrics, and findings
+  // ------------------------------------------------------------------
+  fastify.get("/api/file-detail", async (request, reply) => {
+    const { path: filePath } = request.query as { path?: string };
+    if (!filePath) {
+      return reply.status(400).send({ error: "Missing required query parameter: path" });
+    }
+    try {
+      const detail = await buildFileDetail({
+        relativePath: filePath,
+        workspaceRoot: config.pluginRoot,
+        astEngine: options.astEngine,
+        sarifStore,
+        cyclomaticMax: config.cyclomaticMax,
+      });
+      return detail;
+    } catch (err) {
+      const msg = (err as Error).message;
+      if (msg.includes("ENOENT") || msg.includes("not found")) {
+        return reply.status(404).send({ error: `File not found: ${filePath}` });
+      }
+      if (msg.includes("escapes the workspace")) {
+        return reply.status(400).send({ error: msg });
+      }
+      logger.error({ err: msg, filePath }, "file-detail endpoint error");
+      return reply.status(500).send({ error: "Internal server error" });
+    }
+  });
 
   // ------------------------------------------------------------------
   // / — explicit SPA fallback for index.html
@@ -327,6 +372,101 @@ async function killStaleDashboard(
 
   // Give the OS a moment to release the TCP port after the process dies.
   await new Promise((r) => setTimeout(r, 300));
+}
+
+// ── Complexity report builder ──────────────────────────────────────
+
+/** Entry in the complexity report's top-functions list. */
+interface ComplexityEntry {
+  filePath: string;
+  name: string;
+  cyclomaticComplexity: number;
+  startLine: number;
+  endLine: number;
+  lineCount: number;
+}
+
+/** Shape returned by GET /api/complexity. */
+interface ComplexityReport {
+  threshold: number;
+  totalFunctions: number;
+  violationCount: number;
+  topFunctions: ComplexityEntry[];
+}
+
+/** Directories to skip (mirrors workspace-walker.ts). */
+const SKIP_DIRS: ReadonlySet<string> = new Set([
+  "node_modules", ".git", "dist", "build", "out", "target",
+  ".venv", "venv", "__pycache__", ".cache", ".next", ".nuxt",
+  ".claude-crap", ".codesight",
+]);
+
+/**
+ * Walk the workspace and collect per-function complexity metrics,
+ * returning the top 20 most complex functions. This runs on demand
+ * when the dashboard requests /api/complexity.
+ */
+async function buildComplexityReport(
+  config: CrapConfig,
+  engine: TreeSitterEngine,
+  logger: Logger,
+): Promise<ComplexityReport> {
+  const threshold = config.cyclomaticMax;
+  const allFunctions: ComplexityEntry[] = [];
+  let totalFunctions = 0;
+
+  async function walk(dir: string): Promise<void> {
+    let entries;
+    try {
+      entries = await fs.readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (entry.name.startsWith(".") && entry.name !== ".claude-plugin") continue;
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (SKIP_DIRS.has(entry.name)) continue;
+        await walk(full);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      const language = detectLanguageFromPath(entry.name);
+      if (!language) continue;
+      try {
+        const metrics = await engine.analyzeFile({ filePath: full, language });
+        for (const fn of metrics.functions) {
+          totalFunctions += 1;
+          allFunctions.push({
+            filePath: full.startsWith(config.pluginRoot)
+              ? full.substring(config.pluginRoot.length + 1)
+              : full,
+            name: fn.name,
+            cyclomaticComplexity: fn.cyclomaticComplexity,
+            startLine: fn.startLine,
+            endLine: fn.endLine,
+            lineCount: fn.lineCount,
+          });
+        }
+      } catch (err) {
+        logger.warn(
+          { filePath: full, err: (err as Error).message },
+          "complexity-report: failed to analyze file",
+        );
+      }
+    }
+  }
+
+  await walk(config.pluginRoot);
+
+  // Sort by complexity descending and take top 20
+  allFunctions.sort((a, b) => b.cyclomaticComplexity - a.cyclomaticComplexity);
+  const topFunctions = allFunctions.slice(0, 20);
+  const violationCount = allFunctions.filter(
+    (f) => f.cyclomaticComplexity > threshold,
+  ).length;
+
+  return { threshold, totalFunctions, violationCount, topFunctions };
 }
 
 /**

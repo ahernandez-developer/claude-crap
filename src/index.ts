@@ -114,6 +114,7 @@ async function main(): Promise<void> {
       sarifStore,
       workspaceStatsProvider: () => estimateWorkspaceLoc(config.pluginRoot),
       logger,
+      astEngine,
     });
   } catch (err) {
     logger.warn(
@@ -581,7 +582,10 @@ async function main(): Promise<void> {
       case "auto_scan": {
         logger.info({ tool: "auto_scan" }, "Tool call received");
         try {
-          const result = await autoScan(config.pluginRoot, sarifStore, logger);
+          const result = await autoScan(config.pluginRoot, sarifStore, logger, {
+            engine: astEngine,
+            cyclomaticMax: config.cyclomaticMax,
+          });
           const markdown = renderAutoScanMarkdown(result);
           return {
             content: [
@@ -669,7 +673,10 @@ async function main(): Promise<void> {
   // If the agent calls score_project before scanning finishes, it gets
   // whatever is in the SARIF store so far. The next call after completion
   // reflects all findings.
-  autoScan(config.pluginRoot, sarifStore, logger)
+  autoScan(config.pluginRoot, sarifStore, logger, {
+    engine: astEngine,
+    cyclomaticMax: config.cyclomaticMax,
+  })
     .then((result) => {
       const scanners = result.results
         .filter((r) => r.success)
@@ -756,6 +763,17 @@ function renderAutoScanMarkdown(result: import("./scanner/auto-scan.js").AutoSca
       const duration = `${(r.durationMs / 1000).toFixed(1)}s`;
       lines.push(`| ${r.scanner} | ${status} | ${r.findingsIngested} | ${duration} |`);
     }
+    lines.push("");
+  }
+
+  // Complexity scan
+  if (result.complexityScan) {
+    const cs = result.complexityScan;
+    lines.push("### Cyclomatic complexity scan\n");
+    lines.push(`- Files scanned: **${cs.filesScanned}**`);
+    lines.push(`- Functions analyzed: **${cs.functionsAnalyzed}**`);
+    lines.push(`- Violations: **${cs.violations}**`);
+    lines.push(`- Duration: ${(cs.durationMs / 1000).toFixed(1)}s`);
     lines.push("");
   }
 
