@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2] - 2026-04-12
+
+### Fixed
+
+- **Dashboard 404 on root route** — the Vue SPA now loads on `GET /`
+  via explicit route handler. Removed `decorateReply: false` from
+  fastify-static registration which was preventing `sendFile`.
+  Updated health endpoint version to `0.3.2`.
+- **Bootstrap creates ESLint config when missing** — if ESLint is in
+  `package.json` but has no `eslint.config.mjs`, bootstrap now
+  creates the config instead of short-circuiting. Skips `npm install`
+  when ESLint is already a dependency.
+- **Runner detects ESLint fatal errors** — ESLint crash (no config)
+  is now treated as failure, not as "0 findings".
+- **Auto-scan triggers bootstrap for config-less ESLint** — when
+  ESLint is detected via `package.json` but has no config file,
+  auto-scan calls bootstrap to create one before scanning.
+- **Improved ESLint ignore patterns** — generated `eslint.config.mjs`
+  now ignores `**/bundle/`, `**/vendor/`, and `**/*.min.js` to avoid
+  flagging build artifacts.
+- **npm Trusted Publishing (OIDC)** — release workflow uses OpenID
+  Connect provenance instead of `NPM_TOKEN` secret. No more 90-day
+  token rotation.
+
 ## [0.3.1] - 2026-04-12
 
 ### Fixed

@@ -19,6 +19,8 @@
  * @module scanner/auto-scan
  */
 
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import type { Logger } from "pino";
 import { detectScanners, type ScannerDetection } from "./detector.js";
 import { runScanner, type ScannerRunResult } from "./runner.js";
@@ -105,6 +107,32 @@ export async function autoScan(
     },
     "auto-scan: detection complete",
   );
+
+  // If ESLint is detected (e.g. in package.json) but has no config file,
+  // bootstrap will create one before we try to scan.
+  const eslintConfigFiles = [
+    "eslint.config.js", "eslint.config.mjs", "eslint.config.cjs",
+    "eslint.config.ts", "eslint.config.mts", "eslint.config.cts",
+    ".eslintrc.js", ".eslintrc.cjs", ".eslintrc.yaml",
+    ".eslintrc.yml", ".eslintrc.json",
+  ];
+  const eslintDetected = available.some((d) => d.scanner === "eslint");
+  const hasEslintConfig = eslintConfigFiles.some((f) => existsSync(join(workspaceRoot, f)));
+
+  if (eslintDetected && !hasEslintConfig) {
+    logger.info("auto-scan: ESLint detected but no config — running bootstrap");
+    try {
+      const bootstrapResult = await bootstrapScanner(workspaceRoot, sarifStore, logger);
+      if (bootstrapResult.autoScanResult) {
+        return bootstrapResult.autoScanResult;
+      }
+    } catch (err) {
+      logger.warn(
+        { err: (err as Error).message },
+        "auto-scan: bootstrap config creation failed",
+      );
+    }
+  }
 
   if (available.length === 0) {
     // No scanners configured — try to bootstrap one automatically.

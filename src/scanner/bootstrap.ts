@@ -137,7 +137,14 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    ignores: ["dist/", "node_modules/", "coverage/"],
+    ignores: [
+      "dist/",
+      "node_modules/",
+      "coverage/",
+      "**/bundle/",
+      "**/vendor/",
+      "**/*.min.js",
+    ],
   },
 );
 `;
@@ -148,7 +155,14 @@ export default tseslint.config(
 export default [
   js.configs.recommended,
   {
-    ignores: ["dist/", "node_modules/", "coverage/"],
+    ignores: [
+      "dist/",
+      "node_modules/",
+      "coverage/",
+      "**/bundle/",
+      "**/vendor/",
+      "**/*.min.js",
+    ],
   },
 ];
 `;
@@ -292,7 +306,12 @@ export async function bootstrapScanner(
   const detections = await detectScanners(workspaceRoot);
   const available = detections.filter((d) => d.available);
 
-  if (available.length > 0) {
+  // A scanner is truly "configured" only if it also has a config
+  // file. ESLint in package.json without eslint.config.mjs will crash.
+  const eslintNeedsConfig = available.some((d) => d.scanner === "eslint")
+    && !detections.some((d) => d.scanner === "eslint" && d.configPath);
+
+  if (available.length > 0 && !eslintNeedsConfig) {
     const existingScanners = available.map((d) => d.scanner);
     logger.info(
       { existingScanners },
@@ -319,21 +338,32 @@ export async function bootstrapScanner(
     "bootstrap: detected project type",
   );
 
-  // 3. Install scanner
+  // 3. Install scanner (skip npm install if already in package.json)
   if (recommendation.canAutoInstall) {
-    // JS/TS: auto-install ESLint
     const isTypeScript = projectType === "typescript";
-    const packages = isTypeScript
-      ? ["eslint", "@eslint/js", "typescript-eslint"]
-      : ["eslint", "@eslint/js"];
+    const eslintAlreadyInstalled = available.some((d) => d.scanner === "eslint");
 
-    const installStep = await npmInstall(workspaceRoot, packages);
-    steps.push(installStep);
-
-    if (installStep.success) {
-      const configStep = writeEslintConfigFile(workspaceRoot, isTypeScript);
-      steps.push(configStep);
+    if (!eslintAlreadyInstalled) {
+      const packages = isTypeScript
+        ? ["eslint", "@eslint/js", "typescript-eslint"]
+        : ["eslint", "@eslint/js"];
+      const installStep = await npmInstall(workspaceRoot, packages);
+      steps.push(installStep);
+      if (!installStep.success) {
+        // npm install failed — skip config creation, fall through to result
+        return buildResult(projectType, steps, null);
+      }
+    } else {
+      steps.push({
+        action: "npm install eslint",
+        success: true,
+        detail: "eslint already in package.json — skipped install",
+      });
     }
+
+    // Always create config if missing
+    const configStep = writeEslintConfigFile(workspaceRoot, isTypeScript);
+    steps.push(configStep);
   } else {
     // Python / Java / C# / Unknown: return instructions
     steps.push({
@@ -409,18 +439,31 @@ export async function bootstrapScanner(
   }
 
   // 5. Build result
+  return buildResult(projectType, steps, autoScanResult, recommendation);
+}
+
+/**
+ * Build a BootstrapResult from the collected steps and optional scan result.
+ */
+function buildResult(
+  projectType: ProjectType,
+  steps: BootstrapStep[],
+  autoScanResult: AutoScanResult | null,
+  recommendation?: { scanner: KnownScanner; canAutoInstall: boolean; installInstructions: string },
+): BootstrapResult {
+  const success = steps.every((s) => s.success);
   const findings = autoScanResult?.totalFindings ?? 0;
-  const scannerInstalled = recommendation.canAutoInstall && installSucceeded;
+  const scanner = recommendation?.scanner ?? "unknown";
 
   let summary: string;
-  if (scannerInstalled && autoScanResult) {
-    summary = `Installed ${recommendation.scanner} for ${projectType} project. Auto-scan found ${findings} finding(s).`;
-  } else if (scannerInstalled) {
-    summary = `Installed ${recommendation.scanner} for ${projectType} project. Auto-scan did not run.`;
-  } else if (!recommendation.canAutoInstall) {
-    summary = `Detected ${projectType} project. Install ${recommendation.scanner} manually: ${recommendation.installInstructions}`;
+  if (success && autoScanResult) {
+    summary = `Configured ${scanner} for ${projectType} project. Scan found ${findings} finding(s).`;
+  } else if (success && recommendation && !recommendation.canAutoInstall) {
+    summary = `Detected ${projectType} project. Install ${scanner} manually: ${recommendation.installInstructions}`;
+  } else if (success) {
+    summary = `Configured ${scanner} for ${projectType} project.`;
   } else {
-    summary = `Failed to install ${recommendation.scanner}. Check the error details in the steps.`;
+    summary = `Failed to configure ${scanner}. Check the error details in the steps.`;
   }
 
   return {
@@ -429,7 +472,7 @@ export async function bootstrapScanner(
     existingScanners: [],
     steps,
     autoScanResult,
-    success: installSucceeded,
+    success,
     summary,
   };
 }
