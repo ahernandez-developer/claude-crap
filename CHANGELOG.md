@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-04-12
+
+Built-in scanner auto-detection and execution. Users now get real
+quality grades out of the box without manually running ESLint,
+Semgrep, Bandit, or Stryker.
+
+### Added
+
+- **`src/scanner/` module** — three-layer pipeline for automatic
+  scanner discovery and execution:
+  - `detector.ts` — probes config files, package.json deps, and PATH
+    binaries for each of the four supported scanners.
+  - `runner.ts` — executes scanner CLIs with proper flags and
+    per-scanner timeouts (120s default, 300s for Stryker mutation
+    testing).
+  - `auto-scan.ts` — orchestrates detect → run (parallel) → adapt →
+    ingest → persist. Graceful per-scanner failure.
+  - `index.ts` — public SDK exports (`claude-crap/scanner`).
+- **`auto_scan` MCP tool** — on-demand scanner execution available to
+  the agent mid-session. Returns a Markdown summary + JSON snapshot
+  with detection results, per-scanner stats, and total findings.
+- **Boot-time auto-scan** — fire-and-forget after `server.connect()`
+  so findings are populated by the time `score_project` is first
+  called. Non-blocking: the server is ready for tool calls immediately.
+- **53 new tests** across 3 new test files (`scanner-detector.test.ts`,
+  `scanner-runner.test.ts`, `auto-scan.test.ts`). Suite total: 208
+  tests, 35 suites.
+- **`"./scanner"` export** in `package.json` for SDK consumers.
+- **Marketplace cache troubleshooting** section in README.
+
+### Changed
+
+- MCP tools count in README: 7 → 8 (added `auto_scan`).
+- Test counts in README updated to 208 / 35.
+
 ## [0.1.2] - 2026-04-12
 
 Plugin distribution refactored from npm-source to git-source. Claude
