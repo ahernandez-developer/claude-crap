@@ -1,6 +1,6 @@
 # Contributing
 
-Welcome. `claude-sonar` is a small, opinionated plugin with a
+Welcome. `claude-crap` is a small, opinionated plugin with a
 deliberate architecture — please read [architecture-overview.md](./architecture-overview.md)
 before a large change. This document covers the dev loop, the test
 layout, and the release process.
@@ -8,11 +8,11 @@ layout, and the release process.
 ## Dev loop
 
 ```bash
-git clone https://github.com/ahernandez-developer/claude-sonar.git
-cd claude-sonar
+git clone https://github.com/ahernandez-developer/claude-crap.git
+cd claude-crap
 npm install                   # postinstall builds dist/ automatically
 npm test                      # 105 unit + integration tests should all pass
-node ./bin/claude-sonar.mjs doctor
+node ./bin/claude-crap.mjs doctor
 ```
 
 You need **Node.js ≥ 20**. No other runtime is required. The
@@ -99,7 +99,7 @@ This is the fastest way to see a change end-to-end. After an edit:
 
 ```bash
 npm run build                             # compile dist/
-node ./bin/claude-sonar.mjs doctor        # 12 diagnostic checks
+node ./bin/claude-crap.mjs doctor        # 12 diagnostic checks
 npm run test:integration                  # end-to-end MCP round trips
 ```
 
@@ -132,7 +132,7 @@ Before opening a PR:
 - [ ] `npm run typecheck` passes
 - [ ] `npm run build` succeeds
 - [ ] `npm test` is green
-- [ ] `npx @sr-herz/claude-sonar doctor` reports 0 failures
+- [ ] `npx @sr-herz/claude-crap doctor` reports 0 failures
 - [ ] New code has unit tests
 - [ ] Changed docs in `docs/` are updated if behavior changed
 - [ ] Commit message explains the **why**, not just the **what**
@@ -146,7 +146,7 @@ also pass upstream.
 The best way to file a bug is to run:
 
 ```bash
-npx @sr-herz/claude-sonar bug-report
+npx @sr-herz/claude-crap bug-report
 ```
 
 The command writes a Markdown diagnostic bundle (with secrets

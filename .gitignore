@@ -10,7 +10,7 @@ pnpm-debug.log*
 
 # --- TypeScript build output -------------------------------------------
 # `dist/` is rebuilt by postinstall + prepublishOnly for the npm library
-# distribution (`@sr-herz/claude-sonar/metrics` etc.). It is NOT tracked
+# distribution (`@sr-herz/claude-crap/metrics` etc.). It is NOT tracked
 # in git. The git-source plugin distribution uses `plugin/bundle/` which
 # IS tracked — see `scripts/bundle-plugin.mjs`.
 dist/
@@ -22,11 +22,11 @@ dist/
 plugin/node_modules/
 plugin/bundle/**/*.map
 
-# --- claude-sonar workspace state --------------------------------------
+# --- claude-crap workspace state --------------------------------------
 # The plugin writes its consolidated SARIF report and per-run metrics
-# into `.claude-sonar/` inside whatever workspace the user is developing
+# into `.claude-crap/` inside whatever workspace the user is developing
 # in. That state is per-developer, per-session — never commit it.
-.claude-sonar/
+.claude-crap/
 .codesight/
 
 # --- Environment / secrets ---------------------------------------------

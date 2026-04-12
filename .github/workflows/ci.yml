@@ -37,7 +37,7 @@ jobs:
         # CI installs skip the postinstall auto-build because we want
         # to exercise the `clean → build → test` path explicitly below.
         env:
-          CLAUDE_SONAR_SKIP_POSTINSTALL: '1'
+          CLAUDE_CRAP_SKIP_POSTINSTALL: '1'
         run: npm ci --no-audit --no-fund
 
       - name: TypeScript type check
@@ -61,18 +61,18 @@ jobs:
         run: SONAR_TDR_ENTRY=plugin/bundle/tdr-engine.mjs npm test
 
       - name: Doctor diagnostic (12 checks)
-        run: node ./bin/claude-sonar.mjs doctor
+        run: node ./bin/claude-crap.mjs doctor
 
       - name: Bug report (smoke)
-        run: node ./bin/claude-sonar.mjs bug-report --stdout > /tmp/bug-report.md
+        run: node ./bin/claude-crap.mjs bug-report --stdout > /tmp/bug-report.md
         # Assert the bug report rendered correctly by checking for a
         # landmark heading. Keeps the CLI smoke test honest without
         # running a regex match on every line.
       - name: Assert bug report structure
         run: |
           test -s /tmp/bug-report.md
-          grep -q '# claude-sonar bug report' /tmp/bug-report.md
-          grep -q '## claude-sonar bug report\|# claude-sonar bug report' /tmp/bug-report.md
+          grep -q '# claude-crap bug report' /tmp/bug-report.md
+          grep -q '## claude-crap bug report\|# claude-crap bug report' /tmp/bug-report.md
           grep -q 'Plugin files' /tmp/bug-report.md
           grep -q '\[exit code: 0\]' /tmp/bug-report.md
 
@@ -93,7 +93,7 @@ jobs:
 
       - name: Install dependencies
         env:
-          CLAUDE_SONAR_SKIP_POSTINSTALL: '1'
+          CLAUDE_CRAP_SKIP_POSTINSTALL: '1'
         run: npm ci --no-audit --no-fund
 
       - name: Fast build via esbuild

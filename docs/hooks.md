@@ -1,6 +1,6 @@
 # Hooks reference
 
-`claude-sonar` registers five Claude Code lifecycle hooks. Each one is
+`claude-crap` registers five Claude Code lifecycle hooks. Each one is
 a small Node.js script with no dependencies beyond `plugin/hooks/lib/`. The
 rules themselves live in `plugin/hooks/lib/gatekeeper-rules.mjs`,
 `plugin/hooks/lib/quality-gate.mjs`, and `plugin/hooks/lib/test-harness.mjs` so they

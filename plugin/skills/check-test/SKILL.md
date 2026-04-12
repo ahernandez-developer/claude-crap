@@ -1,20 +1,20 @@
 ---
 name: check-test
-description: Check whether a production source file has an accompanying characterization test using claude-sonar's deterministic test-harness resolver. Use this skill whenever the user asks "is this file tested", "does foo.ts have a test", "where's the test for bar.py", "check test coverage for this file", "do I have a test harness for src/baz.java", or is about to modify a source file and wants to know if the CLAUDE.md Golden Rule test prerequisite is already satisfied. Use it proactively at the start of any work on a .ts / .tsx / .js / .jsx / .mjs / .cjs / .py / .java / .cs file to verify a characterization test exists — this is required by CLAUDE.md and claude-sonar's PostToolUse hook will flag the violation later if you skip the check. The skill takes a single file-path argument after the skill name.
+description: Check whether a production source file has an accompanying characterization test using claude-crap's deterministic test-harness resolver. Use this skill whenever the user asks "is this file tested", "does foo.ts have a test", "where's the test for bar.py", "check test coverage for this file", "do I have a test harness for src/baz.java", or is about to modify a source file and wants to know if the CLAUDE.md Golden Rule test prerequisite is already satisfied. Use it proactively at the start of any work on a .ts / .tsx / .js / .jsx / .mjs / .cjs / .py / .java / .cs file to verify a characterization test exists — this is required by CLAUDE.md and claude-crap's PostToolUse hook will flag the violation later if you skip the check. The skill takes a single file-path argument after the skill name.
 ---
 
 # Check the test harness for a file
 
-Run the `require_test_harness` MCP tool from the claude-sonar server against a user-supplied file path and report whether a matching test exists.
+Run the `require_test_harness` MCP tool from the claude-crap server against a user-supplied file path and report whether a matching test exists.
 
 ## Arguments
 
 The user supplies a file path as the argument, typed after the skill name:
 
 ```
-/claude-sonar:check-test src/foo/bar.ts
-/claude-sonar:check-test pkg/mod.py
-/claude-sonar:check-test app/src/main/java/com/example/Service.java
+/claude-crap:check-test src/foo/bar.ts
+/claude-crap:check-test pkg/mod.py
+/claude-crap:check-test app/src/main/java/com/example/Service.java
 ```
 
 Pass `$ARGUMENTS` verbatim as the `filePath` argument to the MCP tool. Do not normalize, strip quotes, or resolve the path yourself — the server's workspace guard handles that.
@@ -45,6 +45,6 @@ The resolver understands seven conventions (sibling, `__tests__`, mirror tree, n
 
 ## Do not
 
-- Do not guess at test file locations. The resolver enumerates every convention claude-sonar supports — if it returns `hasTest: false`, a matching test genuinely does not exist yet.
+- Do not guess at test file locations. The resolver enumerates every convention claude-crap supports — if it returns `hasTest: false`, a matching test genuinely does not exist yet.
 - Do not suggest the user rename an existing spec file to match the convention. Instead, create a new test file at the highest-priority candidate path so the existing test remains in place if other tooling depends on its name.
 - Do not invoke the skill with an absolute path that points outside the workspace. The workspace guard will reject it, and the user will be confused about why.

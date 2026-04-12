@@ -4,7 +4,7 @@
  *
  * The evaluator is a pure function of:
  *
- *   - the current claude-sonar configuration (read from env),
+ *   - the current claude-crap configuration (read from env),
  *   - the consolidated SARIF file on disk (optional — a missing file
  *     is treated as "no findings yet"),
  *   - a coarse workspace LOC count (bounded walk of the project tree).
@@ -67,7 +67,7 @@ const TDR_ENGINE_PATH = resolve(HOOK_DIR, "..", "..", "bundle", "tdr-engine.mjs"
  */
 
 /**
- * Load the claude-sonar configuration from environment variables. Hooks
+ * Load the claude-crap configuration from environment variables. Hooks
  * read the same `CLAUDE_PLUGIN_OPTION_*` family of variables that the
  * MCP server uses, so the two always agree.
  *
@@ -76,7 +76,7 @@ const TDR_ENGINE_PATH = resolve(HOOK_DIR, "..", "..", "bundle", "tdr-engine.mjs"
 export function loadQualityGateConfig() {
   const workspaceRoot = process.env.CLAUDE_PROJECT_DIR ?? process.cwd();
   const sarifOutputDir =
-    process.env.CLAUDE_PLUGIN_OPTION_SARIF_OUTPUT_DIR ?? ".claude-sonar/reports";
+    process.env.CLAUDE_PLUGIN_OPTION_SARIF_OUTPUT_DIR ?? ".claude-crap/reports";
   const sarifReportDir = isAbsolute(sarifOutputDir)
     ? sarifOutputDir
     : resolve(workspaceRoot, sarifOutputDir);
@@ -156,7 +156,7 @@ const LOC_WALK_SKIP_DIRS = new Set([
   ".cache",
   ".next",
   ".nuxt",
-  ".claude-sonar",
+  ".claude-crap",
   ".codesight",
 ]);
 

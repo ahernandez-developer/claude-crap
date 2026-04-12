@@ -1,20 +1,20 @@
 /**
- * Unit tests for the workspace sonar-config loader.
+ * Unit tests for the workspace crap-config loader.
  *
- * `.claude-sonar.json` lives at the user's workspace root and lets
- * teams pick how strictly claude-sonar enforces its Stop quality
+ * `.claude-crap.json` lives at the user's workspace root and lets
+ * teams pick how strictly claude-crap enforces its Stop quality
  * gate. The loader resolves a single `strictness` value from three
  * possible sources, in priority order:
  *
- *   1. `CLAUDE_SONAR_STRICTNESS` environment variable (session override)
- *   2. `.claude-sonar.json` at the workspace root
+ *   1. `CLAUDE_CRAP_STRICTNESS` environment variable (session override)
+ *   2. `.claude-crap.json` at the workspace root
  *   3. Hardcoded default `"strict"`
  *
  * These tests pin both the characterization invariants (defaults,
  * valid values, precedence) and the attack invariants (invalid
  * values are rejected, not silently downgraded).
  *
- * @module tests/sonar-config.test
+ * @module tests/crap-config.test
  */
 
 import { describe, it, before, after, beforeEach, afterEach } from "node:test";
@@ -27,31 +27,31 @@ import { join } from "node:path";
 import {
   DEFAULT_STRICTNESS,
   STRICTNESS_VALUES,
-  SonarConfigError,
-  loadSonarConfig,
+  CrapConfigError,
+  loadCrapConfig,
   type Strictness,
-} from "../sonar-config.js";
+} from "../crap-config.js";
 
 /**
- * Drop every `CLAUDE_SONAR_STRICTNESS` entry from `process.env` for
+ * Drop every `CLAUDE_CRAP_STRICTNESS` entry from `process.env` for
  * the duration of one test so stray developer environments don't
  * leak into the assertions.
  */
 function unsetStrictnessEnv(): () => void {
-  const previous = process.env.CLAUDE_SONAR_STRICTNESS;
-  delete process.env.CLAUDE_SONAR_STRICTNESS;
+  const previous = process.env.CLAUDE_CRAP_STRICTNESS;
+  delete process.env.CLAUDE_CRAP_STRICTNESS;
   return () => {
-    if (previous === undefined) delete process.env.CLAUDE_SONAR_STRICTNESS;
-    else process.env.CLAUDE_SONAR_STRICTNESS = previous;
+    if (previous === undefined) delete process.env.CLAUDE_CRAP_STRICTNESS;
+    else process.env.CLAUDE_CRAP_STRICTNESS = previous;
   };
 }
 
-describe("loadSonarConfig — characterization (defaults and valid inputs)", () => {
+describe("loadCrapConfig — characterization (defaults and valid inputs)", () => {
   let workspace = "";
   let restoreEnv: () => void = () => {};
 
   before(async () => {
-    workspace = await mkdtemp(join(tmpdir(), "claude-sonar-config-"));
+    workspace = await mkdtemp(join(tmpdir(), "claude-crap-config-"));
   });
 
   after(async () => {
@@ -67,7 +67,7 @@ describe("loadSonarConfig — characterization (defaults and valid inputs)", () 
   });
 
   it("defaults to 'strict' when neither env nor file is present", () => {
-    const config = loadSonarConfig({ workspaceRoot: workspace });
+    const config = loadCrapConfig({ workspaceRoot: workspace });
     assert.equal(config.strictness, "strict");
     assert.equal(DEFAULT_STRICTNESS, "strict");
   });
@@ -83,75 +83,75 @@ describe("loadSonarConfig — characterization (defaults and valid inputs)", () 
     assert.equal(STRICTNESS_VALUES.length, 3);
   });
 
-  it("reads strictness='warn' from .claude-sonar.json", async () => {
-    const path = join(workspace, ".claude-sonar.json");
+  it("reads strictness='warn' from .claude-crap.json", async () => {
+    const path = join(workspace, ".claude-crap.json");
     await fs.writeFile(path, JSON.stringify({ strictness: "warn" }), "utf8");
-    const config = loadSonarConfig({ workspaceRoot: workspace });
+    const config = loadCrapConfig({ workspaceRoot: workspace });
     assert.equal(config.strictness, "warn");
     await fs.unlink(path);
   });
 
-  it("reads strictness='advisory' from .claude-sonar.json", async () => {
-    const path = join(workspace, ".claude-sonar.json");
+  it("reads strictness='advisory' from .claude-crap.json", async () => {
+    const path = join(workspace, ".claude-crap.json");
     await fs.writeFile(path, JSON.stringify({ strictness: "advisory" }), "utf8");
-    const config = loadSonarConfig({ workspaceRoot: workspace });
+    const config = loadCrapConfig({ workspaceRoot: workspace });
     assert.equal(config.strictness, "advisory");
     await fs.unlink(path);
   });
 
-  it("env variable wins over .claude-sonar.json", async () => {
-    const path = join(workspace, ".claude-sonar.json");
+  it("env variable wins over .claude-crap.json", async () => {
+    const path = join(workspace, ".claude-crap.json");
     await fs.writeFile(path, JSON.stringify({ strictness: "warn" }), "utf8");
-    process.env.CLAUDE_SONAR_STRICTNESS = "strict";
-    const config = loadSonarConfig({ workspaceRoot: workspace });
+    process.env.CLAUDE_CRAP_STRICTNESS = "strict";
+    const config = loadCrapConfig({ workspaceRoot: workspace });
     assert.equal(config.strictness, "strict");
     await fs.unlink(path);
   });
 
   it("env variable works without any file present", () => {
-    process.env.CLAUDE_SONAR_STRICTNESS = "advisory";
-    const config = loadSonarConfig({ workspaceRoot: workspace });
+    process.env.CLAUDE_CRAP_STRICTNESS = "advisory";
+    const config = loadCrapConfig({ workspaceRoot: workspace });
     assert.equal(config.strictness, "advisory");
   });
 
   it("env variable is trimmed and case-insensitive", () => {
-    process.env.CLAUDE_SONAR_STRICTNESS = "  WARN  ";
-    const config = loadSonarConfig({ workspaceRoot: workspace });
+    process.env.CLAUDE_CRAP_STRICTNESS = "  WARN  ";
+    const config = loadCrapConfig({ workspaceRoot: workspace });
     assert.equal(config.strictness, "warn");
   });
 
   it("file value is trimmed and case-insensitive", async () => {
-    const path = join(workspace, ".claude-sonar.json");
+    const path = join(workspace, ".claude-crap.json");
     await fs.writeFile(path, JSON.stringify({ strictness: "Advisory" }), "utf8");
-    const config = loadSonarConfig({ workspaceRoot: workspace });
+    const config = loadCrapConfig({ workspaceRoot: workspace });
     assert.equal(config.strictness, "advisory");
     await fs.unlink(path);
   });
 
   it("empty env variable is ignored and falls back to file / default", async () => {
-    const path = join(workspace, ".claude-sonar.json");
+    const path = join(workspace, ".claude-crap.json");
     await fs.writeFile(path, JSON.stringify({ strictness: "advisory" }), "utf8");
-    process.env.CLAUDE_SONAR_STRICTNESS = "";
-    const config = loadSonarConfig({ workspaceRoot: workspace });
+    process.env.CLAUDE_CRAP_STRICTNESS = "";
+    const config = loadCrapConfig({ workspaceRoot: workspace });
     assert.equal(config.strictness, "advisory");
     await fs.unlink(path);
   });
 
   it("file with no strictness key falls back to default", async () => {
-    const path = join(workspace, ".claude-sonar.json");
+    const path = join(workspace, ".claude-crap.json");
     await fs.writeFile(path, JSON.stringify({ somethingElse: true }), "utf8");
-    const config = loadSonarConfig({ workspaceRoot: workspace });
+    const config = loadCrapConfig({ workspaceRoot: workspace });
     assert.equal(config.strictness, "strict");
     await fs.unlink(path);
   });
 });
 
-describe("loadSonarConfig — attack invariants (invalid inputs rejected)", () => {
+describe("loadCrapConfig — attack invariants (invalid inputs rejected)", () => {
   let workspace = "";
   let restoreEnv: () => void = () => {};
 
   before(async () => {
-    workspace = await mkdtemp(join(tmpdir(), "claude-sonar-config-bad-"));
+    workspace = await mkdtemp(join(tmpdir(), "claude-crap-config-bad-"));
   });
 
   after(async () => {
@@ -166,62 +166,62 @@ describe("loadSonarConfig — attack invariants (invalid inputs rejected)", () =
     restoreEnv();
   });
 
-  it("throws SonarConfigError on invalid env variable value", () => {
-    process.env.CLAUDE_SONAR_STRICTNESS = "lenient"; // not in the enum
+  it("throws CrapConfigError on invalid env variable value", () => {
+    process.env.CLAUDE_CRAP_STRICTNESS = "lenient"; // not in the enum
     assert.throws(
-      () => loadSonarConfig({ workspaceRoot: workspace }),
-      SonarConfigError,
+      () => loadCrapConfig({ workspaceRoot: workspace }),
+      CrapConfigError,
     );
   });
 
-  it("throws SonarConfigError on invalid file strictness value", async () => {
-    const path = join(workspace, ".claude-sonar.json");
+  it("throws CrapConfigError on invalid file strictness value", async () => {
+    const path = join(workspace, ".claude-crap.json");
     await fs.writeFile(path, JSON.stringify({ strictness: "lenient" }), "utf8");
     assert.throws(
-      () => loadSonarConfig({ workspaceRoot: workspace }),
-      SonarConfigError,
+      () => loadCrapConfig({ workspaceRoot: workspace }),
+      CrapConfigError,
     );
     await fs.unlink(path);
   });
 
-  it("throws SonarConfigError on a malformed JSON file", async () => {
-    const path = join(workspace, ".claude-sonar.json");
+  it("throws CrapConfigError on a malformed JSON file", async () => {
+    const path = join(workspace, ".claude-crap.json");
     await fs.writeFile(path, "{ this is not json", "utf8");
     assert.throws(
-      () => loadSonarConfig({ workspaceRoot: workspace }),
-      SonarConfigError,
+      () => loadCrapConfig({ workspaceRoot: workspace }),
+      CrapConfigError,
     );
     await fs.unlink(path);
   });
 
-  it("throws SonarConfigError when strictness is the wrong JSON type", async () => {
-    const path = join(workspace, ".claude-sonar.json");
+  it("throws CrapConfigError when strictness is the wrong JSON type", async () => {
+    const path = join(workspace, ".claude-crap.json");
     await fs.writeFile(path, JSON.stringify({ strictness: 42 }), "utf8");
     assert.throws(
-      () => loadSonarConfig({ workspaceRoot: workspace }),
-      SonarConfigError,
+      () => loadCrapConfig({ workspaceRoot: workspace }),
+      CrapConfigError,
     );
     await fs.unlink(path);
   });
 
-  it("throws SonarConfigError when the JSON root is not an object", async () => {
-    const path = join(workspace, ".claude-sonar.json");
+  it("throws CrapConfigError when the JSON root is not an object", async () => {
+    const path = join(workspace, ".claude-crap.json");
     await fs.writeFile(path, JSON.stringify(["strict"]), "utf8");
     assert.throws(
-      () => loadSonarConfig({ workspaceRoot: workspace }),
-      SonarConfigError,
+      () => loadCrapConfig({ workspaceRoot: workspace }),
+      CrapConfigError,
     );
     await fs.unlink(path);
   });
 
-  it("SonarConfigError error messages identify the source that was invalid", () => {
-    process.env.CLAUDE_SONAR_STRICTNESS = "supercritical";
+  it("CrapConfigError error messages identify the source that was invalid", () => {
+    process.env.CLAUDE_CRAP_STRICTNESS = "supercritical";
     try {
-      loadSonarConfig({ workspaceRoot: workspace });
-      assert.fail("expected loadSonarConfig to throw");
+      loadCrapConfig({ workspaceRoot: workspace });
+      assert.fail("expected loadCrapConfig to throw");
     } catch (err) {
-      assert.ok(err instanceof SonarConfigError);
-      assert.match(err.message, /CLAUDE_SONAR_STRICTNESS/);
+      assert.ok(err instanceof CrapConfigError);
+      assert.match(err.message, /CLAUDE_CRAP_STRICTNESS/);
       assert.match(err.message, /supercritical/);
     }
   });

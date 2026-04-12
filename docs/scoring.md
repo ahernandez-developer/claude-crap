@@ -82,7 +82,7 @@ interface ComputeProjectScoreInput {
 The workspace LOC stats come from `estimateWorkspaceLoc()` in
 `src/metrics/workspace-walker.ts`, which is a bounded walker that
 skips `node_modules`, `.git`, `dist`, `build`, `target`, `.venv`,
-`__pycache__`, `.next`, and `.claude-sonar` and hard-stops at 20,000
+`__pycache__`, `.next`, and `.claude-crap` and hard-stops at 20,000
 files.
 
 ## Classification pipeline
@@ -119,7 +119,7 @@ summary — the same one the `score_project` MCP tool returns as its
 first content block.
 
 ```
-## claude-sonar :: project score
+## claude-crap :: project score
 
 **Overall: A** (✅ passes policy, policy ceiling = C)
 
@@ -134,7 +134,7 @@ Findings:  **0 total** (0 error · 0 warning · 0 note)
 Tools:     <none ingested>
 
 📊 Dashboard:   http://127.0.0.1:5117
-📄 Report:      /path/to/.claude-sonar/reports/latest.sarif
+📄 Report:      /path/to/.claude-crap/reports/latest.sarif
 ```
 
 Two lines worth noting:
@@ -144,7 +144,7 @@ Two lines worth noting:
   `dashboardUrl === null`. The Fastify server logs a warning and
   keeps running when its configured port is already in use.
 - **Report path** is absolute so the user can click-copy it into a
-  shell. It points at `.claude-sonar/reports/latest.sarif` relative
+  shell. It points at `.claude-crap/reports/latest.sarif` relative
   to the workspace root by default.
 
 ## When `isError` fires

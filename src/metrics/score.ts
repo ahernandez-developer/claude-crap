@@ -309,7 +309,7 @@ export function renderProjectScoreMarkdown(score: ProjectScore): string {
     : `📊 Dashboard:   <not running — start the MCP server to enable>`;
 
   return [
-    `## claude-sonar :: project score`,
+    `## claude-crap :: project score`,
     ``,
     `**Overall: ${score.overall.rating}** (${verdict}, policy ceiling = ${score.overall.policyRating})`,
     ``,

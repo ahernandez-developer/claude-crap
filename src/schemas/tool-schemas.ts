@@ -197,7 +197,7 @@ export const ingestScannerOutputSchema = {
 /**
  * Schema for the `ingest_sarif` tool. Accepts a raw SARIF 2.1.0 document
  * from an external scanner, deduplicates against the internal store, and
- * normalizes the output into claude-sonar's canonical format.
+ * normalizes the output into claude-crap's canonical format.
  */
 export const ingestSarifSchema = {
   type: "object",

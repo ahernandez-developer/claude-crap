@@ -24,7 +24,7 @@
  * This build mode is strictly for local dev feedback — never use it
  * to publish an npm release. `prepublishOnly` always calls `tsc`.
  *
- * Skip this build with `CLAUDE_SONAR_SKIP_FAST_BUILD=1` to short-circuit.
+ * Skip this build with `CLAUDE_CRAP_SKIP_FAST_BUILD=1` to short-circuit.
  *
  * @module scripts/build-fast
  */
@@ -109,22 +109,22 @@ async function main() {
   const durationMs = Date.now() - started;
   const outCount = entryPoints.length;
   process.stdout.write(
-    `claude-sonar: fast build complete (${outCount} files → ${srcToDist(entryPoints[0] ?? SRC_DIR)
+    `claude-crap: fast build complete (${outCount} files → ${srcToDist(entryPoints[0] ?? SRC_DIR)
       .split("/")
       .slice(-3, -1)
       .join("/")}, ${durationMs}ms)\n`,
   );
   process.stdout.write(
-    `claude-sonar: NOTE — this build skipped type checking and declaration files.\n` +
+    `claude-crap: NOTE — this build skipped type checking and declaration files.\n` +
       `  Run \`npm run typecheck\` before committing, and use \`npm run build\` for releases.\n`,
   );
 }
 
-if (process.env.CLAUDE_SONAR_SKIP_FAST_BUILD) {
+if (process.env.CLAUDE_CRAP_SKIP_FAST_BUILD) {
   process.exit(0);
 }
 
 main().catch((err) => {
-  process.stderr.write(`claude-sonar fast build failed: ${err?.message ?? err}\n`);
+  process.stderr.write(`claude-crap fast build failed: ${err?.message ?? err}\n`);
   process.exit(1);
 });

@@ -1,9 +1,9 @@
 // @ts-check
 /**
- * npm `postinstall` hook for the claude-sonar package.
+ * npm `postinstall` hook for the claude-crap package.
  *
  * Runs automatically after every `npm install` (or
- * `npx @sr-herz/claude-sonar install` of the package). Its job is to
+ * `npx @sr-herz/claude-crap install` of the package). Its job is to
  * ensure both build surfaces exist:
  *
  *   - `dist/`                      — npm library distribution (tsc)
@@ -24,7 +24,7 @@
  *     `npm install` is not aborted (the user may still want a
  *     source-only install for inspection).
  *   - npm sets `INIT_CWD` to the package being installed — we use
- *     that to resolve paths so `npm install claude-sonar` from a
+ *     that to resolve paths so `npm install claude-crap` from a
  *     parent project also works.
  *
  * We never write to stdout unless we have something useful to say,
@@ -40,8 +40,8 @@ import { fileURLToPath } from "node:url";
 
 // Skip the whole postinstall during `npm ci` in production-only
 // environments where build tools may be missing. Users can opt out
-// by setting `CLAUDE_SONAR_SKIP_POSTINSTALL=1`.
-if (process.env.CLAUDE_SONAR_SKIP_POSTINSTALL) {
+// by setting `CLAUDE_CRAP_SKIP_POSTINSTALL=1`.
+if (process.env.CLAUDE_CRAP_SKIP_POSTINSTALL) {
   process.exit(0);
 }
 
@@ -91,7 +91,7 @@ async function main() {
   // Already built? One-line banner and we're done.
   if (await distIsBuilt()) {
     process.stderr.write(
-      "claude-sonar: ✓ prebuilt dist/ detected. Run `npx @sr-herz/claude-sonar install` to finish setup.\n",
+      "claude-crap: ✓ prebuilt dist/ detected. Run `npx @sr-herz/claude-crap install` to finish setup.\n",
     );
     return;
   }
@@ -102,26 +102,26 @@ async function main() {
     await fs.access(join(PLUGIN_ROOT, "node_modules", "typescript", "bin", "tsc"));
   } catch {
     process.stderr.write(
-      "claude-sonar: ! dist/ is missing and TypeScript is not installed. " +
-        "Run `npm install` with devDependencies enabled and then `npx @sr-herz/claude-sonar install`.\n",
+      "claude-crap: ! dist/ is missing and TypeScript is not installed. " +
+        "Run `npm install` with devDependencies enabled and then `npx @sr-herz/claude-crap install`.\n",
     );
     return;
   }
 
-  process.stderr.write("claude-sonar: building entrypoints ...\n");
+  process.stderr.write("claude-crap: building entrypoints ...\n");
   const code = await runBuild();
   if (code !== 0) {
     process.stderr.write(
-      `claude-sonar: ! build failed (exit ${code}). ` +
+      `claude-crap: ! build failed (exit ${code}). ` +
         `Run \`npm run build && npm run build:plugin\` from ${PLUGIN_ROOT} to see the full error.\n`,
     );
     return;
   }
-  process.stderr.write("claude-sonar: ✓ build complete. Next: `npx @sr-herz/claude-sonar install`.\n");
+  process.stderr.write("claude-crap: ✓ build complete. Next: `npx @sr-herz/claude-crap install`.\n");
 }
 
 main().catch((err) => {
-  process.stderr.write(`claude-sonar postinstall: ${err?.message ?? err}\n`);
+  process.stderr.write(`claude-crap postinstall: ${err?.message ?? err}\n`);
   // Do not fail the install — the user can still run the plugin.
   process.exit(0);
 });

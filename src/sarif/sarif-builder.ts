@@ -43,7 +43,7 @@ export interface SarifLocation {
 
 /**
  * A single finding ready to be embedded in a SARIF run. This is the
- * internal shape used by claude-sonar adapters; it is converted into the
+ * internal shape used by claude-crap adapters; it is converted into the
  * official SARIF `result` object by {@link buildSarifDocument}.
  */
 export interface SarifFinding {
@@ -65,7 +65,7 @@ export interface SarifFinding {
  * diffs can distinguish between scanner releases.
  */
 export interface SarifToolInfo {
-  /** Tool display name (e.g. `"claude-sonar"`, `"semgrep"`). */
+  /** Tool display name (e.g. `"claude-crap"`, `"semgrep"`). */
   readonly name: string;
   /** Tool semantic version. */
   readonly version: string;
@@ -97,7 +97,7 @@ export function buildSarifDocument(tool: SarifToolInfo, findings: ReadonlyArray<
           driver: {
             name: tool.name,
             version: tool.version,
-            informationUri: tool.informationUri ?? "https://github.com/local/claude-sonar",
+            informationUri: tool.informationUri ?? "https://github.com/local/claude-crap",
             // Deduplicate rules by id while preserving insertion order so
             // the emitted `rules` array matches the order findings appear.
             rules: Array.from(

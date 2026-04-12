@@ -1,6 +1,6 @@
 // @ts-check
 /**
- * Shared I/O helpers for every claude-sonar hook script.
+ * Shared I/O helpers for every claude-crap hook script.
  *
  * Every hook in the plugin shares the same stdin/stdout/stderr contract
  * with Claude Code (see https://code.claude.com/docs/en/hooks):
@@ -45,7 +45,7 @@ export async function readStdinJson() {
   }
   const raw = Buffer.concat(chunks).toString("utf8").trim();
   if (!raw) {
-    throw new Error("stdin was empty — claude-sonar hook expected a JSON payload");
+    throw new Error("stdin was empty — claude-crap hook expected a JSON payload");
   }
   try {
     return JSON.parse(raw);
@@ -68,7 +68,7 @@ export async function readStdinJson() {
  */
 export function formatBlockingMessage({ title, ruleId, tool, reason }) {
   return [
-    `╭─ claude-sonar :: ${title} BLOCKED ───────────────────────────────`,
+    `╭─ claude-crap :: ${title} BLOCKED ───────────────────────────────`,
     `│ rule : ${ruleId}`,
     `│ tool : ${tool}`,
     `│`,
@@ -91,7 +91,7 @@ export function formatBlockingMessage({ title, ruleId, tool, reason }) {
  */
 export function formatWarningMessage({ title, ruleId, tool, reason }) {
   return [
-    `┌─ claude-sonar :: ${title} WARNING ───────────────────────────────`,
+    `┌─ claude-crap :: ${title} WARNING ───────────────────────────────`,
     `│ rule : ${ruleId}`,
     `│ tool : ${tool}`,
     `│`,
@@ -143,8 +143,8 @@ export async function runHook(hookName, fn) {
     await fn();
   } catch (err) {
     process.stderr.write(
-      `[claude-sonar] ${hookName}: internal error: ${/** @type {Error} */ (err).message}\n` +
-        `[claude-sonar] falling back to permissive mode (fail-open).\n`,
+      `[claude-crap] ${hookName}: internal error: ${/** @type {Error} */ (err).message}\n` +
+        `[claude-crap] falling back to permissive mode (fail-open).\n`,
     );
     process.exit(ExitCodes.INTERNAL);
   }

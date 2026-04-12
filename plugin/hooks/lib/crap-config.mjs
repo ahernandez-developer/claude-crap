@@ -2,24 +2,24 @@
 /**
  * Workspace-level sonar configuration loader (JS twin).
  *
- * This is the hook-side copy of `src/sonar-config.ts`. Hooks live
+ * This is the hook-side copy of `src/crap-config.ts`. Hooks live
  * outside the TypeScript `rootDir` and cannot import the compiled
  * `dist/` engine at the top of the module graph (the hook needs to
  * work even when `dist/` is stale or missing), so we keep a
  * zero-dependency JS twin that implements the same algorithm.
  *
- * See `src/sonar-config.ts` for the full rationale. The two copies
+ * See `src/crap-config.ts` for the full rationale. The two copies
  * are validated against the same behavior table in
- * `src/tests/sonar-config.test.ts` and in
+ * `src/tests/crap-config.test.ts` and in
  * `src/tests/stop-quality-gate-strictness.test.ts`.
  *
  * Resolution order (most specific wins):
  *
- *   1. `CLAUDE_SONAR_STRICTNESS` environment variable
- *   2. `.claude-sonar.json` at the workspace root
+ *   1. `CLAUDE_CRAP_STRICTNESS` environment variable
+ *   2. `.claude-crap.json` at the workspace root
  *   3. Hardcoded default `"strict"`
  *
- * @module hooks/lib/sonar-config
+ * @module hooks/lib/crap-config
  */
 
 import { readFileSync } from "node:fs";
@@ -31,7 +31,7 @@ import { join } from "node:path";
 
 /**
  * Exhaustive list of valid strictness values. Keep in sync with the
- * TypeScript twin at `src/sonar-config.ts`.
+ * TypeScript twin at `src/crap-config.ts`.
  */
 export const STRICTNESS_VALUES = Object.freeze(["strict", "warn", "advisory"]);
 
@@ -45,34 +45,34 @@ export const STRICTNESS_VALUES = Object.freeze(["strict", "warn", "advisory"]);
 export const DEFAULT_STRICTNESS = "strict";
 
 /**
- * Error thrown by {@link loadSonarConfig} when the configuration is
+ * Error thrown by {@link loadCrapConfig} when the configuration is
  * rejected. Hook callers catch this and fall back to the default so
  * a busted config file never deadlocks the user.
  */
-export class SonarConfigError extends Error {
+export class CrapConfigError extends Error {
   /** @param {string} message */
   constructor(message) {
     super(message);
-    this.name = "SonarConfigError";
+    this.name = "CrapConfigError";
   }
 }
 
 /**
  * Resolve the effective sonar configuration for a given workspace.
  * Pure function except for the one synchronous file read on
- * `<workspaceRoot>/.claude-sonar.json` and the single env lookup.
+ * `<workspaceRoot>/.claude-crap.json` and the single env lookup.
  *
  * @param {{ workspaceRoot: string }} options
  * @returns {{ strictness: Strictness, strictnessSource: "env" | "file" | "default" }}
- * @throws  {SonarConfigError} on any invalid input.
+ * @throws  {CrapConfigError} on any invalid input.
  */
-export function loadSonarConfig(options) {
-  const envRaw = process.env["CLAUDE_SONAR_STRICTNESS"];
+export function loadCrapConfig(options) {
+  const envRaw = process.env["CLAUDE_CRAP_STRICTNESS"];
   if (typeof envRaw === "string" && envRaw.trim() !== "") {
     const normalized = envRaw.trim().toLowerCase();
     if (!isStrictness(normalized)) {
-      throw new SonarConfigError(
-        `[sonar-config] CLAUDE_SONAR_STRICTNESS="${envRaw}" is not a valid strictness. ` +
+      throw new CrapConfigError(
+        `[crap-config] CLAUDE_CRAP_STRICTNESS="${envRaw}" is not a valid strictness. ` +
           `Expected one of: ${STRICTNESS_VALUES.join(", ")}.`,
       );
     }
@@ -86,9 +86,9 @@ export function loadSonarConfig(options) {
 }
 
 /**
- * Attempt to read and validate `.claude-sonar.json` at the workspace
+ * Attempt to read and validate `.claude-crap.json` at the workspace
  * root. Returns `null` when the file is missing (the common case for
- * fresh installs). Throws {@link SonarConfigError} on malformed JSON,
+ * fresh installs). Throws {@link CrapConfigError} on malformed JSON,
  * a non-object root, a wrong-type `strictness` field, or an unknown
  * enum value — so the caller cannot silently drop into the default
  * on a typo.
@@ -97,15 +97,15 @@ export function loadSonarConfig(options) {
  * @returns {Strictness | null}
  */
 function readFromFile(workspaceRoot) {
-  const filePath = join(workspaceRoot, ".claude-sonar.json");
+  const filePath = join(workspaceRoot, ".claude-crap.json");
   let raw;
   try {
     raw = readFileSync(filePath, "utf8");
   } catch (err) {
     const error = /** @type {NodeJS.ErrnoException} */ (err);
     if (error.code === "ENOENT") return null;
-    throw new SonarConfigError(
-      `[sonar-config] Failed to read ${filePath}: ${error.message}`,
+    throw new CrapConfigError(
+      `[crap-config] Failed to read ${filePath}: ${error.message}`,
     );
   }
 
@@ -113,28 +113,28 @@ function readFromFile(workspaceRoot) {
   try {
     parsed = JSON.parse(raw);
   } catch (err) {
-    throw new SonarConfigError(
-      `[sonar-config] ${filePath} is not valid JSON: ${/** @type {Error} */ (err).message}`,
+    throw new CrapConfigError(
+      `[crap-config] ${filePath} is not valid JSON: ${/** @type {Error} */ (err).message}`,
     );
   }
 
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new SonarConfigError(
-      `[sonar-config] ${filePath} must be a JSON object at the top level`,
+    throw new CrapConfigError(
+      `[crap-config] ${filePath} must be a JSON object at the top level`,
     );
   }
   if (!("strictness" in parsed)) return null;
 
   const value = parsed.strictness;
   if (typeof value !== "string") {
-    throw new SonarConfigError(
-      `[sonar-config] ${filePath}: 'strictness' must be a string, got ${typeof value}`,
+    throw new CrapConfigError(
+      `[crap-config] ${filePath}: 'strictness' must be a string, got ${typeof value}`,
     );
   }
   const normalized = value.trim().toLowerCase();
   if (!isStrictness(normalized)) {
-    throw new SonarConfigError(
-      `[sonar-config] ${filePath}: 'strictness' is "${value}"; ` +
+    throw new CrapConfigError(
+      `[crap-config] ${filePath}: 'strictness' is "${value}"; ` +
         `expected one of ${STRICTNESS_VALUES.join(", ")}.`,
     );
   }

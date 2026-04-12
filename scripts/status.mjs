@@ -1,9 +1,9 @@
 // @ts-check
 /**
- * `claude-sonar status` — show resolved paths and runtime state.
+ * `claude-crap status` — show resolved paths and runtime state.
  *
  * Designed to be the first thing you run when someone asks
- * "is claude-sonar working?". It reports:
+ * "is claude-crap working?". It reports:
  *
  *   - Plugin version (from package.json)
  *   - Plugin root (where the CLI resolved it to)
@@ -36,7 +36,7 @@ import { printBanner, printKv, paint } from "./lib/cli-ui.mjs";
  * @returns {Promise<number>}
  */
 export default async function status(ctx) {
-  printBanner("claude-sonar :: status");
+  printBanner("claude-crap :: status");
 
   // -- plugin version
   const pkg = await readJson(join(ctx.pluginRoot, "package.json"));
@@ -57,7 +57,7 @@ export default async function status(ctx) {
   printKv("plugin/bundle/...", gitOk ? paint.green("built") : paint.red("MISSING"));
 
   // -- SARIF store
-  const sarifDir = resolve(process.cwd(), ".claude-sonar", "reports");
+  const sarifDir = resolve(process.cwd(), ".claude-crap", "reports");
   const sarifPath = join(sarifDir, "latest.sarif");
   const sarifOk = await exists(sarifPath);
   printKv("SARIF report", sarifOk ? sarifPath : paint.yellow("<not yet generated>"));
@@ -73,7 +73,7 @@ export default async function status(ctx) {
   printKv("minutes / LOC", process.env.CLAUDE_PLUGIN_OPTION_MINUTES_PER_LINE_OF_CODE ?? "30 (default)");
 
   process.stdout.write(
-    `\n${paint.dim("Run `claude-sonar doctor` for a full diagnostic pass.")}\n`,
+    `\n${paint.dim("Run `claude-crap doctor` for a full diagnostic pass.")}\n`,
   );
   return 0;
 }

@@ -1,7 +1,7 @@
-# claude-sonar
+# claude-crap
 
-[![npm version](https://img.shields.io/npm/v/claude-sonar.svg)](https://www.npmjs.com/package/claude-sonar)
-[![CI](https://github.com/ahernandez-developer/claude-sonar/actions/workflows/ci.yml/badge.svg)](https://github.com/ahernandez-developer/claude-sonar/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/claude-crap.svg)](https://www.npmjs.com/package/claude-crap)
+[![CI](https://github.com/ahernandez-developer/claude-crap/actions/workflows/ci.yml/badge.svg)](https://github.com/ahernandez-developer/claude-crap/actions/workflows/ci.yml)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)](https://nodejs.org/)
 [![Bun](https://img.shields.io/badge/bun-%3E%3D1-black.svg)](https://bun.sh/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
@@ -11,7 +11,7 @@
 > and SARIF 2.1.0 reports before a single line of code is allowed to
 > ship.
 
-`claude-sonar` turns Claude Code into a disciplined QA engineer. It
+`claude-crap` turns Claude Code into a disciplined QA engineer. It
 sits underneath your existing Claude Code session as a plugin and
 wraps every `Write`, `Edit`, and `Bash` call with deterministic
 validation: a synchronous **PreToolUse gatekeeper**, a retrospective
@@ -30,39 +30,45 @@ This is the **Fat Platform / Thin Agent** thesis: the LLM is an
 efficient worker, but the rails are mathematical, unforgiving, and
 outside the model's reach.
 
+> **CRAP** stands for **Change Risk Anti-Patterns** — a mildly offensive
+> acronym to protect you from deeply offensive code. The metric was
+> originally developed by Alberto Savoia and Bob Evans at Google in 2007.
+> Read the original post:
+> [This Code is CRAP](https://testing.googleblog.com/2011/02/this-code-is-crap.html).
+
 [Quick Start](#quick-start) • [Configuration](#configuration) • [Documentation](#documentation) • [How It Works](#how-it-works) • [MCP Tools](#mcp-tools) • [System Requirements](#system-requirements) • [Development](#development) • [Bug Reports](#bug-reports) • [Contributing](#contributing)
 
 ---
 
 ## Quick Start
 
-`claude-sonar` ships as a single npm package. One command prepares
+`claude-crap` ships as a single npm package. One command prepares
 the workspace and prints the Claude Code slash command you need to
 run next:
 
 ```bash
-npx @sr-herz/claude-sonar install
+npx @sr-herz/claude-crap install
 ```
 
 `npx` downloads the package, the `postinstall` step compiles `dist/`
-from source, and then `claude-sonar install` creates
-`.claude-sonar/reports/` in the current project, marks every hook
+from source, and then `claude-crap install` creates
+`.claude-crap/reports/` in the current project, marks every hook
 script executable, and prints the exact Claude Code command to
 register the plugin:
 
 ```
-✓ claude-sonar is ready to register with Claude Code.
+✓ claude-crap is ready to register with Claude Code.
 
-  Plugin root: /.../claude-sonar
+  Plugin root: /.../claude-crap
 
   Next steps — pick ONE of the following:
 
   1. Native Claude Code install from this directory:
-       /plugin install /.../claude-sonar
+       /plugin install /.../claude-crap
 
   2. Marketplace install (Claude Code pulls the published npm tarball):
-       /plugin marketplace add https://github.com/ahernandez-developer/claude-sonar
-       /plugin install claude-sonar@herz
+       /plugin marketplace add https://github.com/ahernandez-developer/claude-crap
+       /plugin install claude-crap@herz
 ```
 
 Once Claude Code reports the plugin as active, open any new session
@@ -74,8 +80,8 @@ task close — no further setup required.
 
 > **Two install channels are live:**
 >
-> - **npm** — `npx @sr-herz/claude-sonar install` (direct, works anywhere `npx` does)
-> - **Claude Code marketplace** — `/plugin marketplace add https://github.com/ahernandez-developer/claude-sonar` followed by `/plugin install claude-sonar@herz`. Claude Code resolves the marketplace entry's `source` to `@sr-herz/claude-sonar@0.1.0` on the npm registry, so both routes unpack the **same tarball** and get the same SHA.
+> - **npm** — `npx @sr-herz/claude-crap install` (direct, works anywhere `npx` does)
+> - **Claude Code marketplace** — `/plugin marketplace add https://github.com/ahernandez-developer/claude-crap` followed by `/plugin install claude-crap@herz`. Claude Code resolves the marketplace entry's `source` to `@sr-herz/claude-crap@0.1.0` on the npm registry, so both routes unpack the **same tarball** and get the same SHA.
 
 ---
 
@@ -105,9 +111,9 @@ Teams adopting the plugin on an existing codebase can dial the
 default back with a single file at the workspace root:
 
 ```jsonc
-// .claude-sonar.json — commit this to git for team-wide policy
+// .claude-crap.json — commit this to git for team-wide policy
 {
-  "$schema": "https://raw.githubusercontent.com/ahernandez-developer/claude-sonar/main/schemas/sonar-config.json",
+  "$schema": "https://raw.githubusercontent.com/ahernandez-developer/claude-crap/main/schemas/crap-config.json",
   "strictness": "warn"  // "strict" | "warn" | "advisory"
 }
 ```
@@ -115,15 +121,15 @@ default back with a single file at the workspace root:
 Or override for a single session from the shell:
 
 ```bash
-CLAUDE_SONAR_STRICTNESS=advisory claude
+CLAUDE_CRAP_STRICTNESS=advisory claude
 ```
 
 **Precedence** (most specific wins):
 
-1. `CLAUDE_SONAR_STRICTNESS` environment variable — session-level
+1. `CLAUDE_CRAP_STRICTNESS` environment variable — session-level
    override. Useful for a one-off lenient run without editing the
    committed policy.
-2. `.claude-sonar.json` at the workspace root — team-committed
+2. `.claude-crap.json` at the workspace root — team-committed
    default. Everyone who clones the repo gets the same policy.
 3. Hardcoded default `"strict"` — applies when neither source is
    present. **You don't need to create either the file or the env
@@ -138,10 +144,10 @@ every failing rule. When the project is clean enough to ship under
 policy, delete the file (or switch it to `strict`) and let CI catch
 any regression.
 
-The `.claude-sonar.json` file is a plain JSON document designed to
+The `.claude-crap.json` file is a plain JSON document designed to
 be committed alongside the code. It is intentionally **not** matched
-by the `.claude-sonar/` gitignore rule (which only covers the
-runtime state directory), so `git add .claude-sonar.json` just works.
+by the `.claude-crap/` gitignore rule (which only covers the
+runtime state directory), so `git add .claude-crap.json` just works.
 
 ### Compliance with Claude Code's plugin recommendations
 
@@ -153,13 +159,13 @@ configuration:
 > the user for when the plugin is enabled. Use this instead of
 > requiring users to hand-edit `settings.json`.
 
-**`claude-sonar` deliberately deviates from that pattern** and reads
-`.claude-sonar.json` from the workspace root instead. We chose this
+**`claude-crap` deliberately deviates from that pattern** and reads
+`.claude-crap.json` from the workspace root instead. We chose this
 knowingly, not by accident. The trade-off:
 
 - The canonical `userConfig` pattern prompts every user at
   `/plugin install` time, stores the answer in Claude Code's own
-  `.claude/settings.json` under `pluginConfigs[claude-sonar].options`,
+  `.claude/settings.json` under `pluginConfigs[claude-crap].options`,
   and exposes it as `${user_config.KEY}` or `CLAUDE_PLUGIN_OPTION_KEY`.
   It is the right channel for per-user secrets like API tokens.
 - For an **enum policy with a sensible default** (`strict`), an
@@ -169,7 +175,7 @@ knowingly, not by accident. The trade-off:
   of their project's quality config (`.eslintrc.json`,
   `.prettierrc.json`, `biome.json`, `tsconfig.json`, etc.).
 - The workspace file also lets us ship a proper JSON schema under
-  [`schemas/sonar-config.json`](./schemas/sonar-config.json) for
+  [`schemas/crap-config.json`](./schemas/crap-config.json) for
   IDE autocompletion and CI validation — `userConfig` has no
   equivalent surface.
 
@@ -197,7 +203,7 @@ navigate there if you prefer browsing by chapter.
   dashboard.
 - [Quick install walk-through](./docs/README.md) — the step-by-step
   version of the [Quick Start](#quick-start) above, including first
-  run expectations and the `claude-sonar doctor` diagnostic.
+  run expectations and the `claude-crap doctor` diagnostic.
 
 ### Architecture & Concepts
 
@@ -217,9 +223,9 @@ navigate there if you prefer browsing by chapter.
   Bandit, Stryker — mapping rules, effort tables, how to add a new
   adapter.
 - [SDK reference](./docs/sdk.md) — every symbol exported from
-  `@sr-herz/claude-sonar`, `@sr-herz/claude-sonar/metrics`,
-  `@sr-herz/claude-sonar/sarif`, `@sr-herz/claude-sonar/ast`,
-  `@sr-herz/claude-sonar/tools`, `@sr-herz/claude-sonar/adapters`.
+  `@sr-herz/claude-crap`, `@sr-herz/claude-crap/metrics`,
+  `@sr-herz/claude-crap/sarif`, `@sr-herz/claude-crap/ast`,
+  `@sr-herz/claude-crap/tools`, `@sr-herz/claude-crap/adapters`.
 
 ### Contributing & Releases
 
@@ -369,7 +375,7 @@ import {
   computeProjectScore,
   SarifStore,
   TreeSitterEngine,
-} from "@sr-herz/claude-sonar";
+} from "@sr-herz/claude-crap";
 ```
 
 Full details — including every schema, every error shape, and the
@@ -448,9 +454,9 @@ npm run clean
 CLI shortcuts are exposed as npm scripts too:
 
 ```bash
-npm run doctor        # node ./bin/claude-sonar.mjs doctor
-npm run status        # node ./bin/claude-sonar.mjs status
-npm run bug-report    # writes claude-sonar-bug-report-<ts>.md to the cwd
+npm run doctor        # node ./bin/claude-crap.mjs doctor
+npm run status        # node ./bin/claude-crap.mjs status
+npm run bug-report    # writes claude-crap-bug-report-<ts>.md to the cwd
 ```
 
 ### Releases
@@ -488,33 +494,33 @@ move it to a different port.
 
 ## Bug Reports
 
-The `claude-sonar` CLI ships a `bug-report` subcommand that collects
+The `claude-crap` CLI ships a `bug-report` subcommand that collects
 every piece of information a maintainer typically asks for when
 triaging an issue and writes it to a single Markdown bundle:
 
 ```bash
-npx @sr-herz/claude-sonar bug-report
-# writes ./claude-sonar-bug-report-<timestamp>.md
+npx @sr-herz/claude-crap bug-report
+# writes ./claude-crap-bug-report-<timestamp>.md
 ```
 
 The bundle includes the plugin version, Node / npm / platform
 versions, plugin file presence, the build state of `dist/`, the
 resolved `CLAUDE_PLUGIN_OPTION_*` environment variables (with every
 secret-looking variable automatically redacted by name), the
-`claude-sonar doctor` output, and a summary of the consolidated
+`claude-crap doctor` output, and a summary of the consolidated
 SARIF report if one exists.
 
 Pass `--stdout` to print the bundle instead of writing a file, or
 `-o <path>` to choose the filename. Review the output for anything
 sensitive that slipped past the redactor, then open a new issue at
-[github.com/ahernandez-developer/claude-sonar/issues](https://github.com/ahernandez-developer/claude-sonar/issues)
+[github.com/ahernandez-developer/claude-crap/issues](https://github.com/ahernandez-developer/claude-crap/issues)
 and paste the bundle as the issue body.
 
 ---
 
 ## Contributing
 
-1. **Fork** [ahernandez-developer/claude-sonar](https://github.com/ahernandez-developer/claude-sonar)
+1. **Fork** [ahernandez-developer/claude-crap](https://github.com/ahernandez-developer/claude-crap)
    and create a feature branch off `main`.
 2. **Write the test first.** The CLAUDE.md Golden Rule forbids
    writing functional code before a test safety net exists, and the

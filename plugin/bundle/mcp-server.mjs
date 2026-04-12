@@ -7210,7 +7210,7 @@ function parseNumber(name, raw, fallback) {
   if (raw === void 0 || raw === "") return fallback;
   const value = Number(raw);
   if (!Number.isFinite(value)) {
-    throw new Error(`[claude-sonar] Env ${name}="${raw}" is not a finite number`);
+    throw new Error(`[claude-crap] Env ${name}="${raw}" is not a finite number`);
   }
   return value;
 }
@@ -7218,19 +7218,19 @@ function parseRating(raw, fallback) {
   if (!raw) return fallback;
   const normalized = raw.trim().toUpperCase();
   if (!["A", "B", "C", "D", "E"].includes(normalized)) {
-    throw new Error(`[claude-sonar] TDR_MAX_RATING="${raw}" must be one of A, B, C, D, E`);
+    throw new Error(`[claude-crap] TDR_MAX_RATING="${raw}" must be one of A, B, C, D, E`);
   }
   return normalized;
 }
 function loadConfig() {
   return {
-    pluginRoot: process.env.CLAUDE_SONAR_PLUGIN_ROOT ?? process.cwd(),
-    sarifOutputDir: process.env.CLAUDE_SONAR_SARIF_OUTPUT_DIR ?? ".claude-sonar/reports",
-    crapThreshold: parseNumber("CLAUDE_SONAR_CRAP_THRESHOLD", process.env.CLAUDE_SONAR_CRAP_THRESHOLD, 30),
-    cyclomaticMax: parseNumber("CLAUDE_SONAR_CYCLOMATIC_MAX", process.env.CLAUDE_SONAR_CYCLOMATIC_MAX, 15),
-    tdrMaxRating: parseRating(process.env.CLAUDE_SONAR_TDR_MAX_RATING, "C"),
-    minutesPerLoc: parseNumber("CLAUDE_SONAR_MINUTES_PER_LOC", process.env.CLAUDE_SONAR_MINUTES_PER_LOC, 30),
-    dashboardPort: parseNumber("CLAUDE_SONAR_DASHBOARD_PORT", process.env.CLAUDE_SONAR_DASHBOARD_PORT, 5117)
+    pluginRoot: process.env.CLAUDE_CRAP_PLUGIN_ROOT ?? process.cwd(),
+    sarifOutputDir: process.env.CLAUDE_CRAP_SARIF_OUTPUT_DIR ?? ".claude-crap/reports",
+    crapThreshold: parseNumber("CLAUDE_CRAP_CRAP_THRESHOLD", process.env.CLAUDE_CRAP_CRAP_THRESHOLD, 30),
+    cyclomaticMax: parseNumber("CLAUDE_CRAP_CYCLOMATIC_MAX", process.env.CLAUDE_CRAP_CYCLOMATIC_MAX, 15),
+    tdrMaxRating: parseRating(process.env.CLAUDE_CRAP_TDR_MAX_RATING, "C"),
+    minutesPerLoc: parseNumber("CLAUDE_CRAP_MINUTES_PER_LOC", process.env.CLAUDE_CRAP_MINUTES_PER_LOC, 30),
+    dashboardPort: parseNumber("CLAUDE_CRAP_DASHBOARD_PORT", process.env.CLAUDE_CRAP_DASHBOARD_PORT, 5117)
   };
 }
 
@@ -7384,7 +7384,7 @@ function renderProjectScoreMarkdown(score) {
   const verdict = score.overall.passes ? "\u2705 passes policy" : "\u274C FAILS policy";
   const dashboardLine = score.location.dashboardUrl ? `\u{1F4CA} Dashboard:   ${score.location.dashboardUrl}` : `\u{1F4CA} Dashboard:   <not running \u2014 start the MCP server to enable>`;
   return [
-    `## claude-sonar :: project score`,
+    `## claude-crap :: project score`,
     ``,
     `**Overall: ${score.overall.rating}** (${verdict}, policy ceiling = ${score.overall.policyRating})`,
     ``,
@@ -7417,7 +7417,7 @@ async function startDashboard(options) {
     prefix: "/",
     decorateReply: false
   });
-  fastify.get("/api/health", async () => ({ status: "ok", server: "claude-sonar", version: "0.1.0" }));
+  fastify.get("/api/health", async () => ({ status: "ok", server: "claude-crap", version: "0.1.0" }));
   fastify.get("/api/score", async () => {
     const stats = await workspaceStatsProvider();
     const score = await buildScore(config, sarifStore, stats, urlOf(fastify, config));
@@ -7426,7 +7426,7 @@ async function startDashboard(options) {
   fastify.get("/api/sarif", async () => sarifStore.toSarifDocument());
   await fastify.listen({ port: config.dashboardPort, host: "127.0.0.1" });
   const url = `http://127.0.0.1:${config.dashboardPort}`;
-  logger2.info({ url, publicRoot }, "claude-sonar dashboard listening");
+  logger2.info({ url, publicRoot }, "claude-crap dashboard listening");
   return {
     url,
     async close() {
@@ -7457,7 +7457,7 @@ async function resolvePublicRoot(logger2) {
   }
   logger2.error({ candidates }, "dashboard public/ directory not found");
   throw new Error(
-    `[claude-sonar] dashboard: index.html not found in any of ${candidates.join(", ")}`
+    `[claude-crap] dashboard: index.html not found in any of ${candidates.join(", ")}`
   );
 }
 function urlOf(fastify, config) {
@@ -7526,7 +7526,7 @@ var SKIP_DIRS = /* @__PURE__ */ new Set([
   ".cache",
   ".next",
   ".nuxt",
-  ".claude-sonar",
+  ".claude-crap",
   ".codesight"
 ]);
 var CODE_EXTENSIONS = /* @__PURE__ */ new Set([
@@ -7613,7 +7613,7 @@ function buildSarifDocument(tool, findings) {
           driver: {
             name: tool.name,
             version: tool.version,
-            informationUri: tool.informationUri ?? "https://github.com/local/claude-sonar",
+            informationUri: tool.informationUri ?? "https://github.com/local/claude-crap",
             // Deduplicate rules by id while preserving insertion order so
             // the emitted `rules` array matches the order findings appear.
             rules: Array.from(
@@ -7810,9 +7810,9 @@ var SarifStore = class {
     }));
     return buildSarifDocument(
       {
-        name: "claude-sonar",
+        name: "claude-crap",
         version: "0.1.0",
-        informationUri: "https://github.com/local/claude-sonar"
+        informationUri: "https://github.com/local/claude-crap"
       },
       findings
     );
@@ -7935,24 +7935,24 @@ function validateSarifDocument(doc) {
   );
 }
 
-// src/sonar-config.ts
+// src/crap-config.ts
 import { readFileSync } from "node:fs";
 import { join as join4 } from "node:path";
 var STRICTNESS_VALUES = ["strict", "warn", "advisory"];
 var DEFAULT_STRICTNESS = "strict";
-var SonarConfigError = class extends Error {
+var CrapConfigError = class extends Error {
   constructor(message) {
     super(message);
-    this.name = "SonarConfigError";
+    this.name = "CrapConfigError";
   }
 };
-function loadSonarConfig(options) {
-  const envRaw = process.env["CLAUDE_SONAR_STRICTNESS"];
+function loadCrapConfig(options) {
+  const envRaw = process.env["CLAUDE_CRAP_STRICTNESS"];
   if (typeof envRaw === "string" && envRaw.trim() !== "") {
     const normalized = envRaw.trim().toLowerCase();
     if (!isStrictness(normalized)) {
-      throw new SonarConfigError(
-        `[sonar-config] CLAUDE_SONAR_STRICTNESS="${envRaw}" is not a valid strictness. Expected one of: ${STRICTNESS_VALUES.join(", ")}.`
+      throw new CrapConfigError(
+        `[crap-config] CLAUDE_CRAP_STRICTNESS="${envRaw}" is not a valid strictness. Expected one of: ${STRICTNESS_VALUES.join(", ")}.`
       );
     }
     return { strictness: normalized, strictnessSource: "env" };
@@ -7962,42 +7962,42 @@ function loadSonarConfig(options) {
   return { strictness: DEFAULT_STRICTNESS, strictnessSource: "default" };
 }
 function readFromFile(workspaceRoot) {
-  const filePath = join4(workspaceRoot, ".claude-sonar.json");
+  const filePath = join4(workspaceRoot, ".claude-crap.json");
   let raw;
   try {
     raw = readFileSync(filePath, "utf8");
   } catch (err) {
     const error = err;
     if (error.code === "ENOENT") return null;
-    throw new SonarConfigError(
-      `[sonar-config] Failed to read ${filePath}: ${error.message}`
+    throw new CrapConfigError(
+      `[crap-config] Failed to read ${filePath}: ${error.message}`
     );
   }
   let parsed;
   try {
     parsed = JSON.parse(raw);
   } catch (err) {
-    throw new SonarConfigError(
-      `[sonar-config] ${filePath} is not valid JSON: ${err.message}`
+    throw new CrapConfigError(
+      `[crap-config] ${filePath} is not valid JSON: ${err.message}`
     );
   }
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new SonarConfigError(
-      `[sonar-config] ${filePath} must be a JSON object at the top level`
+    throw new CrapConfigError(
+      `[crap-config] ${filePath} must be a JSON object at the top level`
     );
   }
   const doc = parsed;
   if (!("strictness" in doc)) return null;
   const value = doc["strictness"];
   if (typeof value !== "string") {
-    throw new SonarConfigError(
-      `[sonar-config] ${filePath}: 'strictness' must be a string, got ${typeof value}`
+    throw new CrapConfigError(
+      `[crap-config] ${filePath}: 'strictness' must be a string, got ${typeof value}`
     );
   }
   const normalized = value.trim().toLowerCase();
   if (!isStrictness(normalized)) {
-    throw new SonarConfigError(
-      `[sonar-config] ${filePath}: 'strictness' is "${value}"; expected one of ${STRICTNESS_VALUES.join(", ")}.`
+    throw new CrapConfigError(
+      `[crap-config] ${filePath}: 'strictness' is "${value}"; expected one of ${STRICTNESS_VALUES.join(", ")}.`
     );
   }
   return normalized;
@@ -8077,7 +8077,7 @@ function resolveWithinWorkspace(workspaceRoot, filePath) {
   const candidate = isAbsolute3(filePath) ? resolve5(filePath) : resolve5(workspace, filePath);
   if (candidate !== workspace && !candidate.startsWith(workspace + sep2)) {
     throw new Error(
-      `[claude-sonar] Refusing to access '${filePath}' \u2014 path escapes the workspace root`
+      `[claude-crap] Refusing to access '${filePath}' \u2014 path escapes the workspace root`
     );
   }
   return candidate;
@@ -8236,14 +8236,14 @@ var ingestSarifSchema = {
 
 // src/index.ts
 var logger = pino(
-  { level: process.env.CLAUDE_SONAR_LOG_LEVEL ?? "info" },
+  { level: process.env.CLAUDE_CRAP_LOG_LEVEL ?? "info" },
   pino.destination(2)
 );
 async function main() {
   const config = loadConfig();
   logger.info(
     { config: { ...config, pluginRoot: "<redacted>" } },
-    "claude-sonar MCP server starting"
+    "claude-crap MCP server starting"
   );
   const astEngine = new TreeSitterEngine();
   const sarifStore = new SarifStore({
@@ -8266,7 +8266,7 @@ async function main() {
   } catch (err) {
     logger.warn(
       { err: err.message, port: config.dashboardPort },
-      "claude-sonar dashboard failed to start \u2014 continuing without it"
+      "claude-crap dashboard failed to start \u2014 continuing without it"
     );
   }
   for (const signal of ["SIGINT", "SIGTERM"]) {
@@ -8283,7 +8283,7 @@ async function main() {
   }
   const server = new Server(
     {
-      name: "claude-sonar",
+      name: "claude-crap",
       version: "0.1.0"
     },
     {
@@ -8611,7 +8611,7 @@ async function main() {
         }
       }
       default:
-        throw new Error(`[claude-sonar] Unknown tool: ${name}`);
+        throw new Error(`[claude-crap] Unknown tool: ${name}`);
     }
   });
   server.setRequestHandler(ListResourcesRequestSchema, async () => ({
@@ -8656,17 +8656,17 @@ async function main() {
         ]
       };
     }
-    throw new Error(`[claude-sonar] Unknown resource URI: ${uri}`);
+    throw new Error(`[claude-crap] Unknown resource URI: ${uri}`);
   });
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  logger.info("claude-sonar MCP server ready (stdio)");
+  logger.info("claude-crap MCP server ready (stdio)");
 }
 function safeLoadStrictness(workspaceRoot, logger2) {
   try {
-    return loadSonarConfig({ workspaceRoot }).strictness;
+    return loadCrapConfig({ workspaceRoot }).strictness;
   } catch (err) {
-    if (err instanceof SonarConfigError) {
+    if (err instanceof CrapConfigError) {
       logger2.warn(
         { err: err.message },
         "score_project: invalid sonar config, falling back to strict"
@@ -8708,7 +8708,7 @@ async function buildMetricsSnapshot(config, sarifStore) {
   };
 }
 main().catch((err) => {
-  process.stderr.write(`[claude-sonar] fatal error during startup: ${String(err)}
+  process.stderr.write(`[claude-crap] fatal error during startup: ${String(err)}
 `);
   if (err instanceof Error && err.stack) {
     process.stderr.write(err.stack + "\n");

@@ -31,7 +31,7 @@
  *
  * Every finding gets a rule id of `bandit.<test_id>` (e.g.
  * `bandit.B608`) so it is trivial to correlate with Bandit's own docs
- * from inside the claude-sonar dashboard.
+ * from inside the claude-crap dashboard.
  *
  * @module adapters/bandit
  */

@@ -1,6 +1,6 @@
 // @ts-check
 /**
- * Tiny CLI UI helpers shared by every `claude-sonar <cmd>` subcommand.
+ * Tiny CLI UI helpers shared by every `claude-crap <cmd>` subcommand.
  *
  * Provides ANSI color wrappers (with a `NO_COLOR` fallback), a unified
  * `printStep` formatter for doctor-style checklists, and a handful of

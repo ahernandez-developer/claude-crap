@@ -1,14 +1,14 @@
 {
   "$schema": "https://code.claude.com/schemas/plugin.json",
-  "name": "claude-sonar",
+  "name": "claude-crap",
   "version": "0.1.2",
   "description": "Deterministic Quality Assurance plugin for Claude Code. Wraps every Write / Edit / Bash tool call with a PreToolUse gatekeeper, a PostToolUse verifier, and a Stop quality gate backed by CRAP index, Technical Debt Ratio, tree-sitter AST metrics, and SARIF 2.1.0 reports. Forbids the agent from writing functional code before a test safety net exists.",
   "author": {
     "name": "Alan Hernandez",
     "url": "https://github.com/ahernandez-developer"
   },
-  "homepage": "https://github.com/ahernandez-developer/claude-sonar",
-  "repository": "https://github.com/ahernandez-developer/claude-sonar",
+  "homepage": "https://github.com/ahernandez-developer/claude-crap",
+  "repository": "https://github.com/ahernandez-developer/claude-crap",
   "license": "MIT",
   "keywords": [
     "claude-code",

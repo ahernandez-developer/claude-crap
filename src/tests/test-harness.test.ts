@@ -85,7 +85,7 @@ describe("findTestFile", () => {
   let workspace = "";
 
   before(async () => {
-    workspace = await mkdtemp(join(tmpdir(), "claude-sonar-th-"));
+    workspace = await mkdtemp(join(tmpdir(), "claude-crap-th-"));
     // src/foo.ts with a sibling test
     await fs.mkdir(join(workspace, "src"), { recursive: true });
     await fs.writeFile(join(workspace, "src", "foo.ts"), "// source");

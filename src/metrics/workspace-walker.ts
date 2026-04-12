@@ -31,7 +31,7 @@ export interface WorkspaceWalkResult {
 
 /**
  * Directories that should never contribute to the LOC count. Dependency
- * caches, build artifacts, VCS metadata, claude-sonar's own state.
+ * caches, build artifacts, VCS metadata, claude-crap's own state.
  */
 const SKIP_DIRS: ReadonlySet<string> = new Set([
   "node_modules",
@@ -46,7 +46,7 @@ const SKIP_DIRS: ReadonlySet<string> = new Set([
   ".cache",
   ".next",
   ".nuxt",
-  ".claude-sonar",
+  ".claude-crap",
   ".codesight",
 ]);
 

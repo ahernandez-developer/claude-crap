@@ -1,11 +1,11 @@
 ---
 name: score
-description: Run claude-sonar's deterministic project quality gate and display the A..E letter grade across Maintainability, Reliability, Security, and Overall. Use this skill whenever the user asks "how's the code quality", "what's my CRAP index", "is this project shippable", "show me the technical debt ratio", "run the quality gate", "score the project", or wants a one-glance read on whether the current workspace passes its policy ceiling. Also use this skill proactively at the start of a refactoring session or before a release to establish a quality baseline, and after a substantial refactor to verify the grade has not regressed. Do NOT use it for incident debugging or per-file analysis — for a single file, reach for /claude-sonar:analyze instead.
+description: Run claude-crap's deterministic project quality gate and display the A..E letter grade across Maintainability, Reliability, Security, and Overall. Use this skill whenever the user asks "how's the code quality", "what's my CRAP index", "is this project shippable", "show me the technical debt ratio", "run the quality gate", "score the project", or wants a one-glance read on whether the current workspace passes its policy ceiling. Also use this skill proactively at the start of a refactoring session or before a release to establish a quality baseline, and after a substantial refactor to verify the grade has not regressed. Do NOT use it for incident debugging or per-file analysis — for a single file, reach for /claude-crap:analyze instead.
 ---
 
 # Score the project
 
-Run the `score_project` MCP tool from the claude-sonar server and display the result.
+Run the `score_project` MCP tool from the claude-crap server and display the result.
 
 ## Steps
 
@@ -20,7 +20,7 @@ The output includes four A..E letter grades (one per dimension plus an overall),
 
 ## Why this skill exists
 
-The `score_project` MCP tool is the canonical "is this project shippable?" reading for claude-sonar. It gets run automatically at the Stop quality gate on every task close, but users often want an ad-hoc read mid-session — to know whether a refactor actually improved the grade, to get a baseline before starting new work, or to decide whether to open a PR now or keep iterating. Making it a single slash command instead of a three-step MCP tool invocation removes the friction from those workflows.
+The `score_project` MCP tool is the canonical "is this project shippable?" reading for claude-crap. It gets run automatically at the Stop quality gate on every task close, but users often want an ad-hoc read mid-session — to know whether a refactor actually improved the grade, to get a baseline before starting new work, or to decide whether to open a PR now or keep iterating. Making it a single slash command instead of a three-step MCP tool invocation removes the friction from those workflows.
 
 The engine is deterministic: given the same SARIF store and the same workspace, `score_project` always returns the same grade. That is a feature, not a limitation — it means two developers on the same branch will see identical readings, and it means the grade is safe to cite in PR descriptions and commit messages without the usual LLM caveats about reproducibility.
 

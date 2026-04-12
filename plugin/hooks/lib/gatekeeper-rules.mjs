@@ -1,6 +1,6 @@
 // @ts-check
 /**
- * Deterministic prophylactic rules for the claude-sonar PreToolUse gatekeeper.
+ * Deterministic prophylactic rules for the claude-crap PreToolUse gatekeeper.
  *
  * Each rule is a pure function (input → verdict). Rules never perform I/O:
  * rules that would need a deep analysis instead trigger an MCP tool call
@@ -124,7 +124,7 @@ export function checkBlockedPath(input) {
       ruleId: "SONAR-PATH-001",
       reason:
         `Path '${filePath}' matches BLOCKED_PATH_PATTERNS. ` +
-        `claude-sonar refuses to write or edit sensitive paths such as secrets, .git, node_modules, or .env files. ` +
+        `claude-crap refuses to write or edit sensitive paths such as secrets, .git, node_modules, or .env files. ` +
         `Corrective action: pick a file outside those directories. If this change is legitimate, ` +
         `ask the user to relax CLAUDE_PLUGIN_OPTION_BLOCKED_PATH_PATTERNS before retrying.`,
     };
@@ -201,7 +201,7 @@ export function checkDestructiveBash(input) {
         ruleId: `SONAR-BASH-${pat.id}`,
         reason:
           `The proposed Bash command matched the destructive pattern ${pat.id}: '${command}'. ` +
-          `claude-sonar blocks operations that can wipe the project tree, rewrite published git history, ` +
+          `claude-crap blocks operations that can wipe the project tree, rewrite published git history, ` +
           `or execute remote code without review. ` +
           `Corrective action: if this operation is truly intended, ask the user to confirm and run it ` +
           `manually from their own terminal instead of through the agent.`,

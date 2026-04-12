@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // @ts-check
 /**
- * claude-sonar :: Stop / SubagentStop hook — final quality gate.
+ * claude-crap :: Stop / SubagentStop hook — final quality gate.
  *
  * When the agent (or a subagent) declares it is done with a task,
  * this hook has the last word. It reads the consolidated SARIF
@@ -16,9 +16,9 @@
  * Strictness (v0.1.0):
  *
  *   The behavior on a failing verdict is controlled by the
- *   workspace sonar configuration. Teams can adopt claude-sonar in
- *   stages by editing `.claude-sonar.json` at their workspace root
- *   or setting the `CLAUDE_SONAR_STRICTNESS` environment variable.
+ *   workspace sonar configuration. Teams can adopt claude-crap in
+ *   stages by editing `.claude-crap.json` at their workspace root
+ *   or setting the `CLAUDE_CRAP_STRICTNESS` environment variable.
  *   Three modes are supported:
  *
  *   - `strict` (default) — exit 2 with the full BLOCKED box on
@@ -48,29 +48,29 @@ import { ExitCodes, readStdinJson, runHook } from "./lib/hook-io.mjs";
 import { evaluateQualityGate, loadQualityGateConfig } from "./lib/quality-gate.mjs";
 import {
   DEFAULT_STRICTNESS,
-  loadSonarConfig,
-  SonarConfigError,
-} from "./lib/sonar-config.mjs";
+  loadCrapConfig,
+  CrapConfigError,
+} from "./lib/crap-config.mjs";
 
 /**
  * Resolve the effective strictness for this Stop hook invocation.
  * Falls back to {@link DEFAULT_STRICTNESS} on any loader error so a
- * busted `.claude-sonar.json` never deadlocks the user — the file
+ * busted `.claude-crap.json` never deadlocks the user — the file
  * error is logged to stderr for diagnostics but the gate still
  * runs.
  *
  * @param {string} workspaceRoot Absolute path to the user's workspace.
- * @returns {{strictness: import("./lib/sonar-config.mjs").Strictness, source: "env" | "file" | "default" | "fallback"}}
+ * @returns {{strictness: import("./lib/crap-config.mjs").Strictness, source: "env" | "file" | "default" | "fallback"}}
  */
 function resolveStrictness(workspaceRoot) {
   try {
-    const config = loadSonarConfig({ workspaceRoot });
+    const config = loadCrapConfig({ workspaceRoot });
     return { strictness: config.strictness, source: config.strictnessSource };
   } catch (err) {
-    if (err instanceof SonarConfigError) {
+    if (err instanceof CrapConfigError) {
       process.stderr.write(
-        `[claude-sonar] Stop hook: ${err.message}\n` +
-          `[claude-sonar] falling back to strictness='${DEFAULT_STRICTNESS}' for this run.\n`,
+        `[claude-crap] Stop hook: ${err.message}\n` +
+          `[claude-crap] falling back to strictness='${DEFAULT_STRICTNESS}' for this run.\n`,
       );
       return { strictness: DEFAULT_STRICTNESS, source: "fallback" };
     }
@@ -114,7 +114,7 @@ function renderAdvisoryLine(verdict) {
   const { summary, failures } = verdict;
   const ruleIds = failures.map((f) => f.ruleId).join(", ") || "<none>";
   return (
-    `claude-sonar :: Stop quality gate ADVISORY — ${failures.length} policy note(s). ` +
+    `claude-crap :: Stop quality gate ADVISORY — ${failures.length} policy note(s). ` +
     `TDR ${summary.tdrPercent}% (rating ${summary.tdrRating}), ` +
     `${summary.errorFindings} error / ${summary.warningFindings} warning / ${summary.noteFindings} note, ` +
     `rules: ${ruleIds}. This was an advisory run — the task may close.`
@@ -133,7 +133,7 @@ function renderAdvisoryLine(verdict) {
 function renderVerdictBox(verdict, label) {
   const { summary, failures } = verdict;
   const header = [
-    `╭─ claude-sonar :: Stop quality gate ${label} ─────────────────────`,
+    `╭─ claude-crap :: Stop quality gate ${label} ─────────────────────`,
     `│ total findings      : ${summary.totalFindings}`,
     `│   error / warn / note: ${summary.errorFindings} / ${summary.warningFindings} / ${summary.noteFindings}`,
     `│ remediation minutes : ${summary.remediationMinutes}`,

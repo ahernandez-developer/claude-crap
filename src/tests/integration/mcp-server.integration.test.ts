@@ -139,7 +139,7 @@ class StdioClient {
 
 /**
  * Extract the plain `text` of the first content block in a tools/call
- * response and parse it as JSON. Every claude-sonar tool returns its
+ * response and parse it as JSON. Every claude-crap tool returns its
  * primary payload as a JSON-stringified text block, so this is the
  * standard way to read the data.
  */
@@ -164,7 +164,7 @@ describe("MCP server integration", { skip: !serverBuilt }, () => {
     // project. We populate it with a production source file that has
     // a matching test and another that does not, so the
     // `require_test_harness` assertions exercise both branches.
-    workspace = await mkdtemp(join(tmpdir(), "claude-sonar-integ-"));
+    workspace = await mkdtemp(join(tmpdir(), "claude-crap-integ-"));
     await fs.mkdir(join(workspace, "src"), { recursive: true });
     await fs.writeFile(join(workspace, "src", "foo.ts"), "export const foo = 1;\n");
     await fs.writeFile(join(workspace, "src", "foo.test.ts"), "// test\n");
@@ -180,9 +180,9 @@ describe("MCP server integration", { skip: !serverBuilt }, () => {
       stdio: ["pipe", "pipe", "pipe"],
       env: {
         ...process.env,
-        CLAUDE_SONAR_LOG_LEVEL: "error",
-        CLAUDE_SONAR_PLUGIN_ROOT: workspace,
-        CLAUDE_SONAR_DASHBOARD_PORT: String(dashboardPort),
+        CLAUDE_CRAP_LOG_LEVEL: "error",
+        CLAUDE_CRAP_PLUGIN_ROOT: workspace,
+        CLAUDE_CRAP_DASHBOARD_PORT: String(dashboardPort),
       },
     });
     child.stderr.setEncoding("utf8");
@@ -272,7 +272,7 @@ describe("MCP server integration", { skip: !serverBuilt }, () => {
     }>("tools/call", { name: "score_project", arguments: { format: "both" } });
     const blocks = response.result?.content ?? [];
     assert.equal(blocks.length, 2, "expected markdown + json");
-    assert.match(blocks[0]?.text ?? "", /## claude-sonar :: project score/);
+    assert.match(blocks[0]?.text ?? "", /## claude-crap :: project score/);
     assert.match(blocks[0]?.text ?? "", /\*\*Overall: A\*\*/);
 
     const json = JSON.parse(blocks[1]?.text ?? "{}") as {

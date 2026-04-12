@@ -19,7 +19,7 @@ import type { PersistedSarif } from "../sarif/sarif-store.js";
 import type { SarifLevel } from "../sarif/sarif-builder.js";
 
 /**
- * The canonical list of scanners claude-sonar understands. The
+ * The canonical list of scanners claude-crap understands. The
  * `ingest_scanner_output` MCP tool uses this as its `enum` constraint,
  * so keeping it narrow prevents drift.
  */

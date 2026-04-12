@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 // @ts-check
 /**
- * `claude-sonar` CLI dispatcher.
+ * `claude-crap` CLI dispatcher.
  *
  * Installed as a `bin` entry in `package.json`, so both
- * `npx @sr-herz/claude-sonar <cmd>` and a globally linked install
- * resolve to this file. The binary itself is named `claude-sonar`
+ * `npx @sr-herz/claude-crap <cmd>` and a globally linked install
+ * resolve to this file. The binary itself is named `claude-crap`
  * (independent of the scoped npm package name), so after a global
- * install users can just type `claude-sonar <cmd>`. The CLI is
+ * install users can just type `claude-crap <cmd>`. The CLI is
  * deliberately tiny — each subcommand lives in its own module under
  * `scripts/` so they can be tested in isolation and so new
  * subcommands can be added without touching this dispatcher.
@@ -29,7 +29,7 @@
  * Every subcommand exits with `0` on success and non-zero on failure
  * so the CLI plays well with shell pipelines.
  *
- * @module bin/claude-sonar
+ * @module bin/claude-crap
  */
 
 import { fileURLToPath } from "node:url";
@@ -39,10 +39,10 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const PLUGIN_ROOT = resolve(HERE, "..");
 
 const USAGE = `
-claude-sonar — deterministic QA plugin for Claude Code
+claude-crap — deterministic QA plugin for Claude Code
 
 Usage:
-  claude-sonar <command>
+  claude-crap <command>
 
 Commands:
   install       Prepare the workspace and print the Claude Code install command.
@@ -54,15 +54,15 @@ Commands:
   help          Show this message.
 
 Examples:
-  npx @sr-herz/claude-sonar install
-  npx @sr-herz/claude-sonar doctor
-  npx @sr-herz/claude-sonar status
-  npx @sr-herz/claude-sonar bug-report --stdout
+  npx @sr-herz/claude-crap install
+  npx @sr-herz/claude-crap doctor
+  npx @sr-herz/claude-crap status
+  npx @sr-herz/claude-crap bug-report --stdout
 `.trim();
 
 /**
  * Dynamically import a subcommand module. Keeping imports lazy means
- * `claude-sonar version` or `claude-sonar help` never pays the cost of
+ * `claude-crap version` or `claude-crap help` never pays the cost of
  * loading the filesystem walkers, port probes, or the MCP types.
  *
  * @param {string} name File name under ./scripts/ without the extension.
@@ -117,7 +117,7 @@ async function main() {
     case "--version":
     case "-v": {
       const version = await readVersion();
-      process.stdout.write(`claude-sonar ${version}\n`);
+      process.stdout.write(`claude-crap ${version}\n`);
       return 0;
     }
     case "help":
@@ -127,7 +127,7 @@ async function main() {
       process.stdout.write(USAGE + "\n");
       return 0;
     default:
-      process.stderr.write(`claude-sonar: unknown command '${command}'\n\n`);
+      process.stderr.write(`claude-crap: unknown command '${command}'\n\n`);
       process.stderr.write(USAGE + "\n");
       return 1;
   }
@@ -136,6 +136,6 @@ async function main() {
 main()
   .then((code) => process.exit(code ?? 0))
   .catch((err) => {
-    process.stderr.write(`claude-sonar: fatal error: ${err?.message ?? err}\n`);
+    process.stderr.write(`claude-crap: fatal error: ${err?.message ?? err}\n`);
     process.exit(1);
   });

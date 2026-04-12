@@ -1,8 +1,8 @@
 /**
- * Root public SDK for `@sr-herz/claude-sonar`.
+ * Root public SDK for `@sr-herz/claude-crap`.
  *
  * This is the module you get when you do
- * `import ... from "@sr-herz/claude-sonar"`. It is intentionally
+ * `import ... from "@sr-herz/claude-crap"`. It is intentionally
  * **side-effect-free**: importing this file does NOT start the MCP
  * server, does NOT open the dashboard, does NOT touch the filesystem.
  * Only the executable entrypoint in `dist/index.js` boots the
@@ -17,7 +17,7 @@
  *   - `./tools`   — test-harness resolver used by `require_test_harness`
  *
  * Prefer deep imports
- * (`import { computeCrap } from "@sr-herz/claude-sonar/metrics"`) over
+ * (`import { computeCrap } from "@sr-herz/claude-crap/metrics"`) over
  * pulling everything through the root — they give TypeScript more
  * precise type information and help tree-shakers drop unused modules.
  *
@@ -29,7 +29,7 @@
  *   - `SarifStore`, `buildSarifDocument`
  *   - `TreeSitterEngine`
  *
- * @module claude-sonar
+ * @module claude-crap
  */
 
 // --- metrics ---------------------------------------------------------------
@@ -107,4 +107,4 @@ export type { AdapterResult, KnownScanner } from "./adapters/index.js";
 // We re-export the config type (not `loadConfig`) so consumers can type
 // their own configs without importing the loader, which would read
 // `process.env` eagerly.
-export type { MaintainabilityRating, SonarConfig } from "./config.js";
+export type { MaintainabilityRating, CrapConfig } from "./config.js";

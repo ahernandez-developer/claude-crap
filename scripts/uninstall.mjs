@@ -1,14 +1,14 @@
 // @ts-check
 /**
- * `claude-sonar uninstall` — clean up plugin state and print the
+ * `claude-crap uninstall` — clean up plugin state and print the
  * Claude Code unregister command.
  *
  * Like `install`, this subcommand does NOT try to edit Claude Code's
  * own settings file. It:
  *
- *   1. Prints the native `/plugin uninstall claude-sonar` command the
+ *   1. Prints the native `/plugin uninstall claude-crap` command the
  *      user should run from inside Claude Code.
- *   2. Optionally removes the `.claude-sonar/` scratch directory from
+ *   2. Optionally removes the `.claude-crap/` scratch directory from
  *      the current workspace when called with `--purge`. Without the
  *      flag we leave the SARIF reports in place so the user can diff
  *      them against a re-install.
@@ -36,10 +36,10 @@ import { printBanner, paint, icons } from "./lib/cli-ui.mjs";
  * @returns {Promise<number>}
  */
 export default async function uninstall(ctx) {
-  printBanner("claude-sonar :: uninstall");
+  printBanner("claude-crap :: uninstall");
 
   const purge = ctx.argv.includes("--purge");
-  const scratch = resolve(process.cwd(), ".claude-sonar");
+  const scratch = resolve(process.cwd(), ".claude-crap");
 
   if (purge) {
     try {
@@ -52,7 +52,7 @@ export default async function uninstall(ctx) {
     }
   } else {
     process.stdout.write(
-      `  ${paint.dim(icons.info)} Leaving ${scratch} in place. Use ${paint.bold("claude-sonar uninstall --purge")} to remove SARIF reports.\n`,
+      `  ${paint.dim(icons.info)} Leaving ${scratch} in place. Use ${paint.bold("claude-crap uninstall --purge")} to remove SARIF reports.\n`,
     );
   }
 
@@ -61,10 +61,10 @@ export default async function uninstall(ctx) {
       "",
       paint.bold("  Next step — unregister from Claude Code:"),
       "",
-      `    ${paint.cyan("/plugin uninstall claude-sonar")}`,
+      `    ${paint.cyan("/plugin uninstall claude-crap")}`,
       "",
       paint.dim("  If you installed via `npx`, also remove the npm package:"),
-      `    ${paint.cyan("npm uninstall -g claude-sonar")}`,
+      `    ${paint.cyan("npm uninstall -g claude-crap")}`,
       "",
     ].join("\n"),
   );

@@ -1,6 +1,6 @@
 # MCP tools reference
 
-`claude-sonar` exposes **seven** MCP tools and **two** MCP resources
+`claude-crap` exposes **seven** MCP tools and **two** MCP resources
 over the stdio transport. Every tool input is validated against a
 Draft-07 JSON Schema with `additionalProperties: false`, so malformed
 calls are rejected before the handler runs.
