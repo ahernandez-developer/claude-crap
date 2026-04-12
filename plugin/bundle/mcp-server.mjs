@@ -8905,6 +8905,7 @@ var SKIP_DIRS3 = /* @__PURE__ */ new Set([
   ".git",
   "dist",
   "build",
+  "bundle",
   "out",
   "target",
   ".venv",
