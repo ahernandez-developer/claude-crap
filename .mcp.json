@@ -1,0 +1,18 @@
+{
+  "$schema": "https://code.claude.com/schemas/mcp.json",
+  "mcpServers": {
+    "claude-sonar": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/dist/index.js",
+        "--transport",
+        "stdio"
+      ],
+      "env": {
+        "NODE_ENV": "production",
+        "CLAUDE_SONAR_PLUGIN_ROOT": "${CLAUDE_PLUGIN_ROOT}"
+      }
+    }
+  }
+}

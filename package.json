@@ -1,0 +1,134 @@
+{
+  "name": "@sr-herz/claude-sonar",
+  "version": "0.1.0",
+  "description": "Deterministic QA plugin for Claude Code — CRAP index, Technical Debt Ratio, tree-sitter AST, SARIF 2.1.0, hooks, and a local Vue dashboard.",
+  "keywords": [
+    "claude-code",
+    "claude-code-plugin",
+    "quality-assurance",
+    "sast",
+    "sarif",
+    "crap-index",
+    "technical-debt",
+    "quality-gate",
+    "shift-left",
+    "deterministic",
+    "mutation-testing",
+    "mcp-server",
+    "mcp",
+    "tree-sitter"
+  ],
+  "homepage": "https://github.com/ahernandez-developer/claude-sonar",
+  "bugs": {
+    "url": "https://github.com/ahernandez-developer/claude-sonar/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ahernandez-developer/claude-sonar.git"
+  },
+  "license": "MIT",
+  "author": "Alan Hernandez",
+  "type": "module",
+  "main": "./dist/sdk.js",
+  "types": "./dist/sdk.d.ts",
+  "bin": {
+    "claude-sonar": "./bin/claude-sonar.mjs"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/sdk.d.ts",
+      "import": "./dist/sdk.js"
+    },
+    "./metrics": {
+      "types": "./dist/metrics/index.d.ts",
+      "import": "./dist/metrics/index.js"
+    },
+    "./sarif": {
+      "types": "./dist/sarif/index.d.ts",
+      "import": "./dist/sarif/index.js"
+    },
+    "./ast": {
+      "types": "./dist/ast/index.d.ts",
+      "import": "./dist/ast/index.js"
+    },
+    "./tools": {
+      "types": "./dist/tools/index.d.ts",
+      "import": "./dist/tools/index.js"
+    },
+    "./adapters": {
+      "types": "./dist/adapters/index.d.ts",
+      "import": "./dist/adapters/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "bun": ">=1.0.0"
+  },
+  "files": [
+    ".claude-plugin",
+    ".mcp.json",
+    "CHANGELOG.md",
+    "CLAUDE.md",
+    "LICENSE",
+    "README.md",
+    "bin",
+    "dist",
+    "hooks",
+    "scripts",
+    "src",
+    "tsconfig.json"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "build:fast": "node ./scripts/build-fast.mjs",
+    "build:watch": "tsc -p tsconfig.json --watch",
+    "start": "node ./dist/index.js --transport stdio",
+    "dev": "tsx ./src/index.ts --transport stdio",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --import tsx --test \"./src/tests/**/*.test.ts\"",
+    "test:metrics": "node --import tsx --test \"./src/tests/crap.test.ts\" \"./src/tests/tdr.test.ts\" \"./src/tests/score.test.ts\"",
+    "test:sarif": "node --import tsx --test \"./src/tests/sarif-store.test.ts\"",
+    "test:ast": "node --import tsx --test \"./src/tests/cyclomatic.test.ts\"",
+    "test:harness": "node --import tsx --test \"./src/tests/test-harness.test.ts\"",
+    "test:adapters": "node --import tsx --test \"./src/tests/adapters/**/*.test.ts\"",
+    "test:integration": "node --import tsx --test \"./src/tests/integration/**/*.test.ts\"",
+    "doctor": "node ./bin/claude-sonar.mjs doctor",
+    "status": "node ./bin/claude-sonar.mjs status",
+    "bug-report": "node ./scripts/bug-report.mjs",
+    "clean": "rm -rf ./dist",
+    "postinstall": "node ./scripts/postinstall.mjs",
+    "prepublishOnly": "npm run clean && npm run build && npm test && npm audit --omit=dev --audit-level=high",
+    "release": "np",
+    "release:patch": "np patch --no-cleanup",
+    "release:minor": "np minor --no-cleanup",
+    "release:major": "np major --no-cleanup"
+  },
+  "np": {
+    "yarn": false,
+    "contents": ".",
+    "testScript": "test",
+    "2fa": false
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@fastify/static": "^8.0.3",
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "fast-glob": "^3.3.2",
+    "fastify": "^5.2.0",
+    "pino": "^9.5.0",
+    "tree-sitter-wasms": "^0.1.12",
+    "web-tree-sitter": "^0.24.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "esbuild": "^0.28.0",
+    "np": "^11.0.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
