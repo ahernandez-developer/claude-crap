@@ -32,7 +32,7 @@ plugin in the official Anthropic marketplace.
 ### Changed
 
 - **Marketplace source** in `.claude-plugin/marketplace.json` changed
-  from `{ source: "npm", package: "@sr-herz/claude-crap" }` to
+  from `{ source: "npm", package: "claude-crap" }` to
   `"./plugin"`. Claude Desktop can now filesystem-scan the plugin
   directory from the cloned marketplace repo.
 - **MCP server entry** in `plugin/.mcp.json` changed from
@@ -109,7 +109,7 @@ Claude Code's slash-command palette.
 - **`package.json#files` now ships `plugin/skills/`** in the npm tarball. The
   `v0.1.0` tarball did NOT include `plugin/skills/` — this is the reason a
   new version is mandatory rather than an in-place fix: Claude Code's
-  marketplace installs via `npm install @sr-herz/claude-crap@<version>`,
+  marketplace installs via `npm install claude-crap@<version>`,
   not from the git repo, so the SKILL.md files only reach users after
   a new tarball is published. Consumers who already ran
   `/plugin install claude-crap@herz` against `0.1.0` need to run
@@ -124,7 +124,7 @@ Claude Code's slash-command palette.
   future tense before the `v0.1.0` tag landed ("Once the plugin is
   tagged on GitHub the Claude Code marketplace path becomes a fully
   native second install route") are now replaced with the live
-  commands: `npx @sr-herz/claude-crap install` for the direct npm
+  commands: `npx claude-crap install` for the direct npm
   route, and `/plugin marketplace add https://github.com/ahernandez-developer/claude-crap`
   followed by `/plugin install claude-crap@herz` for the Claude Code
   marketplace route.
@@ -140,7 +140,7 @@ the marketplace, the merge and publish order matters:
    `prepublishOnly` script gates the publish on
    `clean + build + test + audit` — a broken test or a new HIGH
    audit finding will block the tag before any version lands.
-4. Verify on the registry: `npm view @sr-herz/claude-crap version`
+4. Verify on the registry: `npm view claude-crap version`
    should print `0.1.1`.
 5. Tag the release in git: `git tag -a v0.1.1 -m "Release v0.1.1"`
    followed by `git push origin v0.1.1`.
@@ -148,7 +148,7 @@ the marketplace, the merge and publish order matters:
    `gh release create v0.1.1 --notes-file CHANGELOG.md`.
 
 Between step 1 (merge) and step 3 (publish), the `herz` marketplace
-briefly references `@sr-herz/claude-crap@0.1.1` before that version
+briefly references `claude-crap@0.1.1` before that version
 exists on the registry. New marketplace installs during that window
 will fail with a clean npm 404 — no persistent state damage, but
 running `npm publish` immediately after merging minimizes the gap.

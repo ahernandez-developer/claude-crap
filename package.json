@@ -1,5 +1,5 @@
 {
-  "name": "@sr-herz/claude-crap",
+  "name": "claude-crap",
   "version": "0.1.2",
   "description": "Deterministic QA plugin for Claude Code — CRAP index, Technical Debt Ratio, tree-sitter AST, SARIF 2.1.0, hooks, and a local Vue dashboard.",
   "keywords": [

@@ -2,7 +2,7 @@
  * Public SDK entry point for the deterministic metrics engines.
  *
  * Everything re-exported from this barrel is part of the stable public
- * API of `@sr-herz/claude-crap/metrics`. Downstream consumers can rely
+ * API of `claude-crap/metrics`. Downstream consumers can rely
  * on the shapes here remaining semver-stable — breaking changes only
  * land in major versions.
  *
@@ -15,7 +15,7 @@
  *   computeProjectScore,
  *   classifyTdr,
  *   ratingIsWorseThan,
- * } from "@sr-herz/claude-crap/metrics";
+ * } from "claude-crap/metrics";
  * ```
  *
  * @module metrics

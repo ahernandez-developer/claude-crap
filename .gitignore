@@ -10,7 +10,7 @@ pnpm-debug.log*
 
 # --- TypeScript build output -------------------------------------------
 # `dist/` is rebuilt by postinstall + prepublishOnly for the npm library
-# distribution (`@sr-herz/claude-crap/metrics` etc.). It is NOT tracked
+# distribution (`claude-crap/metrics` etc.). It is NOT tracked
 # in git. The git-source plugin distribution uses `plugin/bundle/` which
 # IS tracked — see `scripts/bundle-plugin.mjs`.
 dist/

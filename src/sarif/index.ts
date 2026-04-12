@@ -9,7 +9,7 @@
  *   buildSarifDocument,
  *   type SarifFinding,
  *   type SarifLevel,
- * } from "@sr-herz/claude-crap/sarif";
+ * } from "claude-crap/sarif";
  * ```
  *
  * @module sarif

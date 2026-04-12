@@ -132,7 +132,7 @@ Before opening a PR:
 - [ ] `npm run typecheck` passes
 - [ ] `npm run build` succeeds
 - [ ] `npm test` is green
-- [ ] `npx @sr-herz/claude-crap doctor` reports 0 failures
+- [ ] `npx claude-crap doctor` reports 0 failures
 - [ ] New code has unit tests
 - [ ] Changed docs in `docs/` are updated if behavior changed
 - [ ] Commit message explains the **why**, not just the **what**
@@ -146,7 +146,7 @@ also pass upstream.
 The best way to file a bug is to run:
 
 ```bash
-npx @sr-herz/claude-crap bug-report
+npx claude-crap bug-report
 ```
 
 The command writes a Markdown diagnostic bundle (with secrets

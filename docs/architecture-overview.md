@@ -88,7 +88,7 @@ Five subsystems, each deliberately small:
 
 ## Boot sequence
 
-1. User runs `npx @sr-herz/claude-crap install`, then
+1. User runs `npx claude-crap install`, then
    `/plugin install <path>` inside Claude Code.
 2. Claude Code reads `.claude-plugin/plugin.json` → discovers the
    hook wiring in `plugin/hooks/hooks.json` and the MCP server launch

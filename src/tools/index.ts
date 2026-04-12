@@ -14,7 +14,7 @@
  *   findTestFile,
  *   isTestFile,
  *   candidatePaths,
- * } from "@sr-herz/claude-crap/tools";
+ * } from "claude-crap/tools";
  * ```
  *
  * @module tools

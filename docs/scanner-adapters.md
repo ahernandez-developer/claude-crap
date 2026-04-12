@@ -27,7 +27,7 @@ From inside an MCP session, call the `ingest_scanner_output` tool:
 From TypeScript or Node.js code, import the dispatcher from the SDK:
 
 ```ts
-import { adaptScannerOutput } from "@sr-herz/claude-crap/adapters";
+import { adaptScannerOutput } from "claude-crap/adapters";
 
 const result = adaptScannerOutput("eslint", rawJsonFromEslint);
 // result.document    → PersistedSarif (SARIF 2.1.0)

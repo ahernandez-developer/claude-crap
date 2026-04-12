@@ -17,7 +17,7 @@
  *   adaptEslint,
  *   adaptBandit,
  *   adaptStryker,
- * } from "@sr-herz/claude-crap/adapters";
+ * } from "claude-crap/adapters";
  *
  * const result = adaptScannerOutput("eslint", rawJsonFromEslint);
  * sarifStore.ingestRun(result.document, result.sourceTool);
