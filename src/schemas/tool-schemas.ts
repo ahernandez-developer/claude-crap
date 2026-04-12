@@ -203,6 +203,20 @@ export const ingestScannerOutputSchema = {
  * Schema for the `auto_scan` tool. Auto-detects available scanners
  * in the workspace, runs them, and ingests findings into the SARIF store.
  */
+/**
+ * Schema for the `bootstrap_scanner` tool. Detects project type,
+ * installs the appropriate scanner, creates config files, and runs
+ * auto_scan to verify.
+ */
+export const bootstrapScannerSchema = {
+  type: "object",
+  description:
+    "Detect the project type (JavaScript, TypeScript, Python, Java, C#), install the appropriate scanner (ESLint for JS/TS, Bandit for Python, Semgrep for Java/C#), create a minimal config file, and run auto_scan to verify. Skips installation if a scanner is already configured. Use this when auto_scan finds no scanners and quality grades are vacuously A.",
+  properties: {},
+  required: [],
+  additionalProperties: false,
+} as const;
+
 export const autoScanSchema = {
   type: "object",
   description:

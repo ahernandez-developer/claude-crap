@@ -232,7 +232,7 @@ describe("MCP server integration", { skip: !serverBuilt }, () => {
     assert.ok(child && !child.killed, "server child should be running");
   });
 
-  it("exposes all eight tools via tools/list", async () => {
+  it("exposes all nine tools via tools/list", async () => {
     const response = await client!.request<{ result?: { tools?: Array<{ name: string }> } }>(
       "tools/list",
     );
@@ -240,6 +240,7 @@ describe("MCP server integration", { skip: !serverBuilt }, () => {
     assert.deepEqual(names, [
       "analyze_file_ast",
       "auto_scan",
+      "bootstrap_scanner",
       "compute_crap",
       "compute_tdr",
       "ingest_sarif",

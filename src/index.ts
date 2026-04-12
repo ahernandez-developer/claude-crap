@@ -58,8 +58,10 @@ import { loadCrapConfig, CrapConfigError } from "./crap-config.js";
 import { findTestFile } from "./tools/test-harness.js";
 import { resolveWithinWorkspace } from "./workspace-guard.js";
 import { autoScan } from "./scanner/auto-scan.js";
+import { bootstrapScanner } from "./scanner/bootstrap.js";
 import {
   autoScanSchema,
+  bootstrapScannerSchema,
   computeCrapSchema,
   computeTdrSchema,
   analyzeFileAstSchema,
@@ -212,6 +214,12 @@ async function main(): Promise<void> {
         description:
           "Auto-detect available scanners (ESLint, Semgrep, Bandit, Stryker) in the workspace, run them, and ingest findings into the SARIF store.",
         inputSchema: autoScanSchema,
+      },
+      {
+        name: "bootstrap_scanner",
+        description:
+          "Detect project type, install the right scanner (ESLint for JS/TS, Bandit for Python, Semgrep for Java/C#), create minimal config, and run auto_scan to verify.",
+        inputSchema: bootstrapScannerSchema,
       },
     ],
   }));
@@ -540,6 +548,36 @@ async function main(): Promise<void> {
         }
       }
 
+      case "bootstrap_scanner": {
+        logger.info({ tool: "bootstrap_scanner" }, "Tool call received");
+        try {
+          const result = await bootstrapScanner(config.pluginRoot, sarifStore, logger);
+          const markdown = renderBootstrapMarkdown(result);
+          return {
+            content: [
+              { type: "text", text: markdown },
+              { type: "text", text: JSON.stringify(result, null, 2) },
+            ],
+            isError: !result.success,
+          };
+        } catch (err) {
+          logger.error({ err }, "bootstrap_scanner failed");
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify(
+                  { tool: "bootstrap_scanner", status: "error", message: (err as Error).message },
+                  null,
+                  2,
+                ),
+              },
+            ],
+            isError: true,
+          };
+        }
+      }
+
       case "auto_scan": {
         logger.info({ tool: "auto_scan" }, "Tool call received");
         try {
@@ -651,6 +689,46 @@ async function main(): Promise<void> {
         "auto-scan failed — continuing without it",
       );
     });
+}
+
+/**
+ * Render a human-readable Markdown summary of a bootstrap result.
+ */
+function renderBootstrapMarkdown(result: import("./scanner/bootstrap.js").BootstrapResult): string {
+  const lines: string[] = ["## claude-crap :: bootstrap scanner\n"];
+
+  lines.push(`**Project type:** ${result.projectType}`);
+
+  if (result.alreadyConfigured) {
+    lines.push(`**Status:** Scanner(s) already configured: ${result.existingScanners.join(", ")}`);
+    lines.push("\nNo installation needed. Run `auto_scan` to ingest findings.");
+    return lines.join("\n");
+  }
+
+  lines.push("");
+
+  if (result.steps.length > 0) {
+    lines.push("### Steps\n");
+    lines.push("| Action | Status | Detail |");
+    lines.push("| ------ | :----: | ------ |");
+    for (const s of result.steps) {
+      const status = s.success ? "ok" : "failed";
+      lines.push(`| ${s.action} | ${status} | ${s.detail} |`);
+    }
+    lines.push("");
+  }
+
+  if (result.autoScanResult) {
+    const r = result.autoScanResult;
+    const scanners = r.results.filter((s) => s.success).map((s) => s.scanner);
+    lines.push(
+      `**Auto-scan:** ${r.totalFindings} finding(s) ingested from ${scanners.join(", ") || "no scanners"} in ${(r.totalDurationMs / 1000).toFixed(1)}s`,
+    );
+    lines.push("");
+  }
+
+  lines.push(`**Summary:** ${result.summary}`);
+  return lines.join("\n");
 }
 
 /**

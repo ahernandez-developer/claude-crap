@@ -331,7 +331,7 @@ behind each component.
 
 ## MCP Tools
 
-The MCP server exposes eight deterministic tools and two resources.
+The MCP server exposes nine deterministic tools and two resources.
 Every tool has a strict JSON Schema (Draft-07) with
 `additionalProperties: false`, `enum`, `pattern`, and numeric bounds,
 so any drift from the contract produces a deterministic error the
@@ -362,6 +362,7 @@ platform is designed to be used:
 | `require_test_harness`  | Check whether a production source file has an accompanying test file in any of the supported conventions.                                     | `filePath`                                                            |
 | `score_project`         | Aggregate the entire workspace into Maintainability / Reliability / Security / Overall A..E grades with Markdown and JSON output.             | `format` (`markdown` / `json` / `both`)                               |
 | `auto_scan`             | Auto-detect available scanners (ESLint, Semgrep, Bandit, Stryker) in the workspace, run them, and ingest findings into the SARIF store.       | (none — fully automatic)                                              |
+| `bootstrap_scanner`     | Detect project type (JS/TS/Python/Java/C#), install the right scanner, create minimal config, and run auto_scan to verify.                    | (none — fully automatic)                                              |
 
 **Available MCP resources:**
 
@@ -456,7 +457,7 @@ npm run build:watch
 # Run in dev mode (tsx, no build step)
 npm run dev
 
-# Full native test suite — 208 tests across 35 suites
+# Full native test suite — 225 tests across 37 suites
 npm test
 
 # Narrow the feedback loop to one domain while iterating
@@ -547,7 +548,7 @@ and paste the bundle as the issue body.
    PreToolUse hook will block you if you try. Add a characterization
    test that pins the current behavior, then the attack test that
    demonstrates the bug, then the patch.
-3. **Run `npm test`.** The full suite must stay at 208 / 208 green.
+3. **Run `npm test`.** The full suite must stay at 225 / 225 green.
    If you add new tests, update the count in the
    [Development](#development) section and in `CHANGELOG.md`.
 4. **Update the `CHANGELOG.md`** with an entry describing your

@@ -20,3 +20,11 @@
 export { detectScanners, type ScannerDetection } from "./detector.js";
 export { runScanner, type ScannerRunResult } from "./runner.js";
 export { autoScan, type AutoScanResult, type ScannerResult } from "./auto-scan.js";
+export {
+  bootstrapScanner,
+  detectProjectType,
+  generateEslintConfig,
+  type BootstrapResult,
+  type BootstrapStep,
+  type ProjectType,
+} from "./bootstrap.js";
