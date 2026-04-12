@@ -24,9 +24,9 @@
  * @module dashboard/server
  */
 
-import { promises as fs } from "node:fs";
+import { promises as fs, existsSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { createServer as createTcpServer } from "node:net";
-import { dirname, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import Fastify, { type FastifyInstance } from "fastify";
@@ -126,27 +126,24 @@ export async function startDashboard(options: StartDashboardOptions): Promise<Da
     return reply.sendFile("index.html");
   });
 
-  // Find a free port. The configured port is tried first, then up to
-  // MAX_PORT_RETRIES consecutive neighbors. This handles the common
-  // case where a previous Claude Code session left a stale MCP server
-  // process holding the default port.
-  const MAX_PORT_RETRIES = 4;
-  const boundPort = await findFreePort(config.dashboardPort, MAX_PORT_RETRIES, logger);
+  // Kill any stale dashboard from a previous session so we always
+  // bind to the configured port. This mirrors claude-mem's PID file
+  // pattern: write a PID file when alive, check + kill on next boot.
+  const pidFilePath = resolvePidFilePath(config);
+  await killStaleDashboard(pidFilePath, config.dashboardPort, logger);
 
-  await fastify.listen({ port: boundPort, host: "127.0.0.1" });
+  await fastify.listen({ port: config.dashboardPort, host: "127.0.0.1" });
 
-  const url = `http://127.0.0.1:${boundPort}`;
-  if (boundPort !== config.dashboardPort) {
-    logger.warn(
-      { url, configuredPort: config.dashboardPort, actualPort: boundPort },
-      "claude-crap dashboard bound to fallback port (configured port was in use)",
-    );
-  }
+  const url = `http://127.0.0.1:${config.dashboardPort}`;
   logger.info({ url, publicRoot }, "claude-crap dashboard listening");
+
+  // Write PID file so the next session can find and kill us.
+  writePidFile(pidFilePath, config.dashboardPort);
 
   return {
     url,
     async close() {
+      removePidFile(pidFilePath);
       await fastify.close();
     },
   };
@@ -203,54 +200,134 @@ function urlOf(fastify: FastifyInstance, config: CrapConfig): string {
   return `http://127.0.0.1:${config.dashboardPort}`;
 }
 
+// ------------------------------------------------------------------
+// PID file management — mirrors claude-mem's worker.pid pattern
+// ------------------------------------------------------------------
+
 /**
- * Probe a sequence of TCP ports starting at `startPort` and return the
- * first one that is free. Uses a raw `net.createServer()` probe that
- * opens and immediately closes to avoid interfering with Fastify's own
- * listen lifecycle (Fastify instances cannot re-listen after close).
- *
- * @param startPort     The preferred port.
- * @param maxRetries    How many consecutive ports to try after the first.
- * @param logger        Pino logger for diagnostics.
- * @returns             The first free port found.
- * @throws              When all candidate ports are occupied.
+ * Shape of the PID file written by the dashboard process.
  */
-async function findFreePort(
-  startPort: number,
-  maxRetries: number,
+interface DashboardPidFile {
+  pid: number;
+  port: number;
+  startedAt: string;
+}
+
+/**
+ * Resolve the path to the PID file. Stored under
+ * `.claude-crap/dashboard.pid` in the workspace so it survives
+ * across sessions but is gitignored with the rest of `.claude-crap/`.
+ */
+function resolvePidFilePath(config: CrapConfig): string {
+  return join(config.pluginRoot, ".claude-crap", "dashboard.pid");
+}
+
+/**
+ * Write the PID file atomically after the dashboard has started.
+ */
+function writePidFile(path: string, port: number): void {
+  const data: DashboardPidFile = {
+    pid: process.pid,
+    port,
+    startedAt: new Date().toISOString(),
+  };
+  try {
+    writeFileSync(path, JSON.stringify(data, null, 2) + "\n");
+  } catch {
+    /* best effort — dashboard still works without a PID file */
+  }
+}
+
+/**
+ * Remove the PID file during graceful shutdown.
+ */
+function removePidFile(path: string): void {
+  try {
+    unlinkSync(path);
+  } catch {
+    /* already gone or never written */
+  }
+}
+
+/**
+ * Check whether a process is alive using the signal-0 probe.
+ * Returns `true` when the process exists and is reachable.
+ */
+function isPidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Read the PID file, kill any stale dashboard process, and free the
+ * port so the current session can bind to it. This is the key
+ * difference from the port-fallback approach: instead of drifting to
+ * 5118, 5119, etc., we reclaim the configured port every time.
+ *
+ * @param pidFilePath  Absolute path to `dashboard.pid`.
+ * @param port         The configured dashboard port.
+ * @param logger       Pino logger for diagnostics.
+ */
+async function killStaleDashboard(
+  pidFilePath: string,
+  port: number,
   logger: Logger,
-): Promise<number> {
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    const candidatePort = startPort + attempt;
-    const isFree = await new Promise<boolean>((resolvePromise) => {
-      const probe = createTcpServer();
-      probe.once("error", (err: NodeJS.ErrnoException) => {
-        if (err.code === "EADDRINUSE") {
-          resolvePromise(false);
-        } else {
-          // Unexpected error (permission denied, etc.) — treat as unavailable.
-          resolvePromise(false);
-        }
-      });
-      probe.listen({ port: candidatePort, host: "127.0.0.1" }, () => {
-        probe.close(() => resolvePromise(true));
-      });
-    });
+): Promise<void> {
+  if (!existsSync(pidFilePath)) return;
 
-    if (isFree) return candidatePort;
-
-    if (attempt < maxRetries) {
-      logger.info(
-        { port: candidatePort, nextPort: candidatePort + 1 },
-        "dashboard port in use, trying next",
-      );
-    }
+  let stale: DashboardPidFile;
+  try {
+    stale = JSON.parse(readFileSync(pidFilePath, "utf8"));
+  } catch {
+    // Corrupted PID file — remove it and move on.
+    removePidFile(pidFilePath);
+    return;
   }
 
-  // All ports exhausted — throw so startDashboard rejects gracefully.
-  throw new Error(
-    `[claude-crap] dashboard: all ports ${startPort}–${startPort + maxRetries} are in use`,
+  if (!isPidAlive(stale.pid)) {
+    logger.info({ stalePid: stale.pid }, "stale dashboard PID file found (process dead), removing");
+    removePidFile(pidFilePath);
+    return;
+  }
+
+  // Process is alive — kill it so we can reclaim the port.
+  logger.info(
+    { stalePid: stale.pid, port: stale.port, startedAt: stale.startedAt },
+    "killing stale dashboard process from previous session",
   );
+
+  try {
+    process.kill(stale.pid, "SIGTERM");
+  } catch {
+    // Permission denied or already gone — remove PID file either way.
+    removePidFile(pidFilePath);
+    return;
+  }
+
+  // Wait up to 3 seconds for the process to exit.
+  for (let i = 0; i < 30; i++) {
+    if (!isPidAlive(stale.pid)) break;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+
+  // If still alive after 3s, escalate to SIGKILL.
+  if (isPidAlive(stale.pid)) {
+    try {
+      process.kill(stale.pid, "SIGKILL");
+    } catch {
+      /* best effort */
+    }
+    await new Promise((r) => setTimeout(r, 200));
+  }
+
+  removePidFile(pidFilePath);
+
+  // Give the OS a moment to release the TCP port after the process dies.
+  await new Promise((r) => setTimeout(r, 300));
 }
 
 /**
