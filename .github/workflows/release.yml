@@ -2,6 +2,8 @@ name: Release
 
 on:
   push:
+    # Triggers on version bumps to main AND manual tag pushes
+    branches: [main]
     tags:
       - 'v*'
 
@@ -16,8 +18,48 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read version from package.json
+        id: version
+        run: |
+          version=$(node -p "require('./package.json').version")
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Check if tag already exists
+        id: check
+        run: |
+          if git rev-parse "refs/tags/${{ steps.version.outputs.tag }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check if version is already on npm
+        id: npm_check
+        run: |
+          published=$(npm view claude-crap version 2>/dev/null || echo "0.0.0")
+          if [ "$published" = "${{ steps.version.outputs.version }}" ]; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Skip everything if this version is already fully released
+      - name: Skip if already released
+        id: should_release
+        run: |
+          if [ "${{ steps.check.outputs.exists }}" = "true" ] && [ "${{ steps.npm_check.outputs.published }}" = "true" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Version ${{ steps.version.outputs.version }} already released — skipping."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Set up Node.js 22
+        if: steps.should_release.outputs.skip == 'false'
         uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -25,45 +67,53 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies
+        if: steps.should_release.outputs.skip == 'false'
         env:
           CLAUDE_CRAP_SKIP_POSTINSTALL: '1'
         run: npm ci --no-audit --no-fund
 
       - name: TypeScript type check
+        if: steps.should_release.outputs.skip == 'false'
         run: npm run typecheck
 
       - name: Build dist/
+        if: steps.should_release.outputs.skip == 'false'
         run: npm run build
 
       - name: Build plugin/bundle/
+        if: steps.should_release.outputs.skip == 'false'
         run: npm run build:plugin
 
       - name: Run tests
+        if: steps.should_release.outputs.skip == 'false'
         run: SONAR_TDR_ENTRY=plugin/bundle/tdr-engine.mjs npm test
 
+      - name: Create and push tag
+        if: steps.should_release.outputs.skip == 'false' && steps.check.outputs.exists == 'false'
+        run: |
+          git tag "${{ steps.version.outputs.tag }}"
+          git push origin "${{ steps.version.outputs.tag }}"
+
       - name: Publish to npm
+        if: steps.should_release.outputs.skip == 'false' && steps.npm_check.outputs.published == 'false'
         run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Extract version from tag
-        id: version
-        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-
       - name: Extract changelog for this version
-        id: changelog
+        if: steps.should_release.outputs.skip == 'false'
         run: |
-          # Extract the section for this version from CHANGELOG.md
           version="${{ steps.version.outputs.version }}"
           awk "/^## \[${version}\]/{found=1; next} /^## \[/{if(found) exit} found{print}" CHANGELOG.md > /tmp/release-notes.md
-          # If no changelog section found, use a default message
           if [ ! -s /tmp/release-notes.md ]; then
             echo "Release ${version}" > /tmp/release-notes.md
           fi
 
       - name: Create GitHub Release
+        if: steps.should_release.outputs.skip == 'false'
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.version.outputs.tag }}
           name: v${{ steps.version.outputs.version }}
           body_path: /tmp/release-notes.md
           generate_release_notes: false
