@@ -22,7 +22,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { Logger } from "pino";
-import { detectScanners, type ScannerDetection } from "./detector.js";
+import { detectScanners, detectMonorepoScanners, type ScannerDetection } from "./detector.js";
 import { runScanner, type ScannerRunResult } from "./runner.js";
 import { bootstrapScanner } from "./bootstrap.js";
 import { scanComplexity, type ComplexityScanResult } from "./complexity-scanner.js";
@@ -97,17 +97,28 @@ export async function autoScan(
   workspaceRoot: string,
   sarifStore: SarifStore,
   logger: Logger,
-  options?: { engine?: TreeSitterEngine; cyclomaticMax?: number },
+  options?: { engine?: TreeSitterEngine; cyclomaticMax?: number; exclude?: ReadonlyArray<string> },
 ): Promise<AutoScanResult> {
   const start = Date.now();
 
-  // 1. Detect available scanners
+  // 1. Detect available scanners (root + monorepo subdirs)
   const detected = await detectScanners(workspaceRoot);
+  const monorepoDetected = await detectMonorepoScanners(workspaceRoot);
+
+  // Merge monorepo detections — skip duplicates (same scanner already found at root)
+  const rootScannerSet = new Set(detected.filter((d) => d.available).map((d) => d.scanner));
+  for (const md of monorepoDetected) {
+    if (!rootScannerSet.has(md.scanner)) {
+      detected.push(md);
+    }
+  }
+
   const available = detected.filter((d) => d.available);
 
   logger.info(
     {
       detected: detected.map((d) => `${d.scanner}:${d.available}`),
+      monorepo: monorepoDetected.length,
       available: available.length,
     },
     "auto-scan: detection complete",
@@ -162,9 +173,9 @@ export async function autoScan(
     };
   }
 
-  // 2. Run all available scanners in parallel
+  // 2. Run all available scanners in parallel (each from its detected workingDir)
   const runResults = await Promise.allSettled(
-    available.map((d) => runScanner(d.scanner, workspaceRoot)),
+    available.map((d) => runScanner(d.scanner, workspaceRoot, d.workingDir ? { workingDir: d.workingDir } : undefined)),
   );
 
   // 3. Ingest results
@@ -259,7 +270,7 @@ export async function autoScan(
         workspaceRoot,
         options.engine,
         sarifStore,
-        { cyclomaticMax: options.cyclomaticMax ?? 15 },
+        { cyclomaticMax: options.cyclomaticMax ?? 15, ...(options.exclude ? { exclude: options.exclude } : {}) },
         logger,
       );
       totalFindings += complexityScan.violations;

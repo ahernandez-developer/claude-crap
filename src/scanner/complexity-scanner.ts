@@ -24,29 +24,11 @@ import type { Logger } from "pino";
 import { TreeSitterEngine } from "../ast/tree-sitter-engine.js";
 import { detectLanguageFromPath } from "../ast/language-config.js";
 import { wrapResultsInSarif, estimateEffortMinutes } from "../adapters/common.js";
+import { createExclusionFilter } from "../shared/exclusions.js";
 import type { SarifStore } from "../sarif/sarif-store.js";
 import type { SarifLevel } from "../sarif/sarif-builder.js";
 
-// ── Constants ─────────────────────────────────────────────────────
-
-/** Directories that should never be scanned. Mirrors `workspace-walker.ts`. */
-const SKIP_DIRS: ReadonlySet<string> = new Set([
-  "node_modules",
-  ".git",
-  "dist",
-  "build",
-  "bundle",
-  "out",
-  "target",
-  ".venv",
-  "venv",
-  "__pycache__",
-  ".cache",
-  ".next",
-  ".nuxt",
-  ".claude-crap",
-  ".codesight",
-]);
+// Directory exclusions are now centralized in src/shared/exclusions.ts.
 
 /** Hard cap on files to prevent unbounded analysis. */
 const MAX_FILES = 20_000;
@@ -75,6 +57,8 @@ export interface ComplexityScanResult {
 export interface ComplexityScanConfig {
   /** Maximum cyclomatic complexity allowed per function. */
   readonly cyclomaticMax: number;
+  /** User-defined exclusion patterns from .claude-crap.json. */
+  readonly exclude?: ReadonlyArray<string>;
 }
 
 // ── Scanner ───────────────────────────────────────────────────────
@@ -106,7 +90,8 @@ export async function scanComplexity(
   const errorThreshold = threshold * 2;
 
   // 1. Collect supported source files
-  const files = await collectSourceFiles(workspaceRoot);
+  const filter = createExclusionFilter(config.exclude);
+  const files = await collectSourceFiles(workspaceRoot, filter);
   logger.info(
     { fileCount: files.length, threshold },
     "complexity-scanner: starting analysis",
@@ -194,10 +179,13 @@ export async function scanComplexity(
 
 /**
  * Collect source files from the workspace that the tree-sitter engine
- * can analyze. Skips directories in `SKIP_DIRS` and hidden directories.
- * Only returns files whose extension maps to a supported language.
+ * can analyze. Uses the shared exclusion filter for directory and file
+ * filtering. Only returns files whose extension maps to a supported language.
  */
-async function collectSourceFiles(workspaceRoot: string): Promise<string[]> {
+async function collectSourceFiles(
+  workspaceRoot: string,
+  filter: import("../shared/exclusions.js").ExclusionFilter,
+): Promise<string[]> {
   const files: string[] = [];
   let truncated = false;
 
@@ -211,16 +199,16 @@ async function collectSourceFiles(workspaceRoot: string): Promise<string[]> {
     }
     for (const entry of entries) {
       if (truncated) return;
-      if (entry.name.startsWith(".") && entry.name !== ".claude-plugin") continue;
       const full = join(dir, entry.name);
       if (entry.isDirectory()) {
-        if (SKIP_DIRS.has(entry.name)) continue;
+        if (filter.shouldSkipDir(entry.name)) continue;
         await walk(full);
         continue;
       }
       if (!entry.isFile()) continue;
-      // Only include files the tree-sitter engine can parse
       if (!detectLanguageFromPath(entry.name)) continue;
+      const relPath = relative(workspaceRoot, full);
+      if (filter.shouldSkipFile(relPath, entry.name)) continue;
       files.push(full);
       if (files.length >= MAX_FILES) {
         truncated = true;

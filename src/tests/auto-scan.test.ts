@@ -34,7 +34,7 @@ describe("autoScan", () => {
         outputDir: join(dir, ".claude-crap/reports"),
       });
       const result = await autoScan(dir, store, logger);
-      assert.equal(result.detected.length, 4);
+      assert.equal(result.detected.length, 5);
       assert.ok(result.totalDurationMs >= 0);
       // No scanners available means no results
       // (unless the host has scanner binaries installed)
@@ -129,7 +129,7 @@ describe("autoScan", () => {
       const result = await autoScan(dir, store, logger);
 
       const scannerNames = result.detected.map((d) => d.scanner).sort();
-      assert.deepEqual(scannerNames, ["bandit", "eslint", "semgrep", "stryker"]);
+      assert.deepEqual(scannerNames, ["bandit", "dart_analyze", "eslint", "semgrep", "stryker"]);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

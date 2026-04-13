@@ -17,8 +17,8 @@
  * @module scanner/detector
  */
 
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { execFile } from "node:child_process";
 import type { KnownScanner } from "../adapters/common.js";
 
@@ -36,6 +36,8 @@ export interface ScannerDetection {
   reason: string;
   /** Path to the config file that triggered detection, if any. */
   configPath?: string;
+  /** Working directory to run the scanner from (defaults to workspace root). */
+  workingDir?: string;
 }
 
 // ── Detection signals ──────────────────────────────────────────────
@@ -97,6 +99,14 @@ const SCANNER_SIGNALS: Record<KnownScanner, ScannerSignals> = {
     ],
     packageJsonKeys: ["@stryker-mutator/core"],
     binaryNames: ["stryker"],
+  },
+  dart_analyze: {
+    configFiles: [
+      "analysis_options.yaml",
+      "pubspec.yaml",
+    ],
+    packageJsonKeys: [],
+    binaryNames: ["dart"],
   },
 };
 
@@ -163,9 +173,9 @@ function probeBinary(binaryName: string): Promise<boolean> {
 // ── Public API ──────────────────────────────────────────────────────
 
 /**
- * Detect which of the four supported scanners are available in the
- * given workspace. Probes config files, package.json, and binary
- * availability in order, short-circuiting on first match.
+ * Detect which supported scanners are available in the given workspace.
+ * Probes config files, package.json, and binary availability in order,
+ * short-circuiting on first match.
  *
  * @param workspaceRoot Absolute path to the project root.
  * @returns One {@link ScannerDetection} per known scanner.
@@ -173,7 +183,7 @@ function probeBinary(binaryName: string): Promise<boolean> {
 export async function detectScanners(
   workspaceRoot: string,
 ): Promise<ScannerDetection[]> {
-  const scanners: KnownScanner[] = ["eslint", "semgrep", "bandit", "stryker"];
+  const scanners: KnownScanner[] = ["eslint", "semgrep", "bandit", "stryker", "dart_analyze"];
 
   const results = await Promise.all(
     scanners.map(async (scanner): Promise<ScannerDetection> => {
@@ -226,5 +236,93 @@ export async function detectScanners(
   return results;
 }
 
+// ── Monorepo subdirectory probing ────────────────────────────────
+
+/**
+ * Common monorepo directory names that may contain workspace
+ * subdirectories. Checked one level deep only.
+ */
+const MONOREPO_DIRS = ["apps", "packages", "libs", "modules", "services"];
+
+/**
+ * Detect scanners in monorepo subdirectories. Probes first-level
+ * children of common monorepo directories (apps/, packages/, etc.)
+ * and npm workspaces for scanner config files. Returns detections
+ * with a `workingDir` pointing to the subdirectory.
+ *
+ * This catches e.g. `apps/mobile/pubspec.yaml` in a polyglot monorepo
+ * where the root-level detector only finds ESLint.
+ *
+ * @param workspaceRoot Absolute path to the project root.
+ * @returns Additional detections from subdirectories (may be empty).
+ */
+export async function detectMonorepoScanners(
+  workspaceRoot: string,
+): Promise<ScannerDetection[]> {
+  const subdirs = new Set<string>();
+
+  // 1. Read npm workspaces from package.json
+  try {
+    const pkgPath = join(workspaceRoot, "package.json");
+    const raw = readFileSync(pkgPath, "utf-8");
+    const pkg = JSON.parse(raw) as Record<string, unknown>;
+    if (Array.isArray(pkg.workspaces)) {
+      for (const ws of pkg.workspaces) {
+        if (typeof ws === "string" && !ws.includes("*")) {
+          const full = resolve(workspaceRoot, ws);
+          if (existsSync(full)) subdirs.add(full);
+        }
+      }
+    }
+  } catch {
+    // No package.json or not parseable — continue
+  }
+
+  // 2. Scan common monorepo directories one level deep
+  for (const dir of MONOREPO_DIRS) {
+    const full = join(workspaceRoot, dir);
+    try {
+      const entries = readdirSync(full, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.isDirectory() && !entry.name.startsWith(".")) {
+          subdirs.add(join(full, entry.name));
+        }
+      }
+    } catch {
+      // Directory doesn't exist — skip
+    }
+  }
+
+  if (subdirs.size === 0) return [];
+
+  // 3. Probe each subdirectory for scanner config files
+  const detections: ScannerDetection[] = [];
+  const scanners: KnownScanner[] = ["eslint", "semgrep", "bandit", "stryker", "dart_analyze"];
+
+  for (const subdir of subdirs) {
+    for (const scanner of scanners) {
+      const configProbe = probeConfigFiles(subdir, scanner);
+      if (!configProbe.found) continue;
+
+      // For dart_analyze, also verify the binary is on PATH
+      if (scanner === "dart_analyze") {
+        const hasBinary = await probeBinary("dart");
+        if (!hasBinary) continue;
+      }
+
+      const relDir = subdir.replace(workspaceRoot + "/", "");
+      detections.push({
+        scanner,
+        available: true,
+        reason: `config file found in ${relDir}/`,
+        ...(configProbe.path ? { configPath: configProbe.path } : {}),
+        workingDir: subdir,
+      });
+    }
+  }
+
+  return detections;
+}
+
 // Exported for testing
-export { SCANNER_SIGNALS };
+export { SCANNER_SIGNALS, MONOREPO_DIRS };

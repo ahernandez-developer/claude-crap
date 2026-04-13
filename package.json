@@ -1,6 +1,6 @@
 {
   "name": "claude-crap",
-  "version": "0.3.7",
+  "version": "0.3.8",
   "description": "Deterministic QA plugin for Claude Code — CRAP index, Technical Debt Ratio, tree-sitter AST, SARIF 2.1.0, hooks, and a local Vue dashboard.",
   "keywords": [
     "claude-code",
@@ -123,6 +123,7 @@
     "ajv-formats": "^3.0.1",
     "fast-glob": "^3.3.2",
     "fastify": "^5.2.0",
+    "picomatch": "^2.3.2",
     "pino": "^9.5.0",
     "tree-sitter-wasms": "^0.1.12",
     "web-tree-sitter": "^0.24.4"
@@ -130,6 +131,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "^22.10.2",
+    "@types/picomatch": "^4.0.3",
     "esbuild": "^0.28.0",
     "eslint": "^10.2.0",
     "globals": "^17.5.0",
