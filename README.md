@@ -183,11 +183,9 @@ probes npm workspaces and common directories (`apps/`, `packages/`,
 ```
 Session start
   → discover project map
-  → detect: www (TypeScript), app (TypeScript), mobile (Dart), api (C#)
-  → ESLint not installed? → auto-install at monorepo root
-  → run ESLint from root (covers all JS/TS)
-  → run dart analyze from apps/mobile/
-  → run dotnet format from apps/api/
+  → detect sub-projects by type (TypeScript, Dart, C#, Python, etc.)
+  → install missing scanners (ESLint auto-installed via npm)
+  → run each scanner from its project directory
   → aggregate all findings into one SARIF store
   → score_project ready with real data
 ```
@@ -197,9 +195,12 @@ exposed via the `list_projects` MCP tool. Use `score_project` with
 the optional `scope` parameter to score a single sub-project:
 
 ```ts
-// Score only the mobile app
-score_project({ format: "both", scope: "mobile" })
+// Score only one sub-project
+score_project({ format: "both", scope: "frontend" })
 ```
+
+See [docs/supported-languages.md](./docs/supported-languages.md) for
+detailed per-language setup and behavior.
 
 **File exclusions** are centralized and cover all major frameworks
 out of the box: `dist/`, `build/`, `bundle/`, `vendor/`,
@@ -220,6 +221,7 @@ added via `.claude-crap.json`:
 
 | Section | Link |
 | :------ | :--- |
+| Supported languages & scanners | [docs/supported-languages.md](./docs/supported-languages.md) |
 | Architecture & boot sequence | [docs/architecture-overview.md](./docs/architecture-overview.md) |
 | Quality gate math (CRAP, TDR, ratings) | [docs/quality-gate.md](./docs/quality-gate.md) |
 | Project score aggregation | [docs/scoring.md](./docs/scoring.md) |
