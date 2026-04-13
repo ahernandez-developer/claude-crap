@@ -101,6 +101,43 @@ Proposed change             : <syntactic summary, ≤3 lines>
 Do not omit fields. Do not merge cells. Do not add sections. If a field
 does not apply, write `n/a` and justify on a single line.
 
+## Monorepo Project Discovery
+
+When the workspace is a monorepo (multiple sub-projects under one
+root), the plugin auto-discovers sub-projects at session start from
+npm workspaces and conventional directories (`apps/`, `packages/`,
+`libs/`, etc.). However, **non-standard layouts require your help.**
+
+If you detect that the workspace has sub-projects in directories not
+covered by the defaults (e.g. projects at the root level like
+`root/app1`, `root/app2`, or nested like `root/domain/app1`), you
+should:
+
+1. Call `list_projects` to see what was auto-discovered.
+2. If projects are missing, update `.claude-crap.json` to add the
+   `projectDirs` field with the correct paths:
+
+```jsonc
+// .claude-crap.json
+{
+  "strictness": "strict",
+  "projectDirs": ["frontend", "backend", "tools/cli"]
+}
+```
+
+Each entry can be:
+- A **parent directory** scanned one level deep: `"frontend"` discovers
+  `frontend/app1`, `frontend/app2`, etc.
+- A **direct project path**: `"tools/cli"` treats that directory itself
+  as a project.
+
+The plugin merges user-configured `projectDirs` with npm workspaces
+and the built-in defaults. You do NOT need to repeat `apps/` or
+`packages/` — those are always probed automatically.
+
+**Do this early in the session** — before running `score_project` or
+any scanner tool — so the quality gate covers all sub-projects.
+
 ## Context Virtualization (anti Context Bloat)
 
 - It is **forbidden** to run iterative `grep`/`glob` searches over the

@@ -59,6 +59,7 @@ import { findTestFile } from "./tools/test-harness.js";
 import { resolveWithinWorkspace } from "./workspace-guard.js";
 import { autoScan } from "./scanner/auto-scan.js";
 import { bootstrapScanner } from "./scanner/bootstrap.js";
+import { discoverProjectMap, persistProjectMap, type ProjectMap } from "./monorepo/project-map.js";
 import {
   autoScanSchema,
   bootstrapScannerSchema,
@@ -67,6 +68,7 @@ import {
   analyzeFileAstSchema,
   ingestSarifSchema,
   ingestScannerOutputSchema,
+  listProjectsSchema,
   requireTestHarnessSchema,
   scoreProjectSchema,
 } from "./schemas/tool-schemas.js";
@@ -93,13 +95,18 @@ async function main(): Promise<void> {
     "claude-crap MCP server starting",
   );
 
-  // Load user-defined exclusions from .claude-crap.json (non-fatal).
+  // Load user-defined exclusions and projectDirs from .claude-crap.json (non-fatal).
   let userExclusions: ReadonlyArray<string> = [];
+  let userProjectDirs: ReadonlyArray<string> = [];
   try {
     const crapConfig = loadCrapConfig({ workspaceRoot: config.pluginRoot });
     userExclusions = crapConfig.exclude;
+    userProjectDirs = crapConfig.projectDirs;
     if (userExclusions.length > 0) {
       logger.info({ exclude: userExclusions }, "user exclusions loaded from .claude-crap.json");
+    }
+    if (userProjectDirs.length > 0) {
+      logger.info({ projectDirs: userProjectDirs }, "user projectDirs loaded from .claude-crap.json");
     }
   } catch {
     // Non-fatal — use empty exclusions.
@@ -116,6 +123,39 @@ async function main(): Promise<void> {
     { findings: sarifStore.size(), path: sarifStore.consolidatedReportPath },
     "SARIF store ready",
   );
+
+  // Discover monorepo project map (non-fatal).
+  let projectMap: ProjectMap | null = null;
+  try {
+    projectMap = await discoverProjectMap(config.pluginRoot, { projectDirs: userProjectDirs });
+    if (projectMap.isMonorepo) {
+      logger.info(
+        { projects: projectMap.projects.map((p) => `${p.name}(${p.type})`), count: projectMap.projects.length },
+        "monorepo project map discovered",
+      );
+      await persistProjectMap(projectMap, config.pluginRoot);
+
+      // If any JS/TS sub-projects need ESLint and it's not available,
+      // run bootstrap at the monorepo root to auto-install it. In
+      // monorepos, ESLint is hoisted to the root node_modules.
+      const needsEslint = projectMap.projects.some(
+        (p) => (p.type === "typescript" || p.type === "javascript") && !p.scannerAvailable,
+      );
+      if (needsEslint) {
+        logger.info("monorepo: JS/TS projects detected but ESLint not installed — bootstrapping");
+        try {
+          await bootstrapScanner(config.pluginRoot, sarifStore, logger);
+          // Re-discover after install so scannerAvailable reflects reality
+          projectMap = await discoverProjectMap(config.pluginRoot, { projectDirs: userProjectDirs });
+          await persistProjectMap(projectMap, config.pluginRoot);
+        } catch (err) {
+          logger.warn({ err: (err as Error).message }, "monorepo ESLint bootstrap failed");
+        }
+      }
+    }
+  } catch (err) {
+    logger.warn({ err: (err as Error).message }, "project map discovery failed");
+  }
 
   // Try to start the local Vue.js dashboard. Failures here are
   // intentionally non-fatal — the MCP server still works without it.
@@ -235,6 +275,11 @@ async function main(): Promise<void> {
           "Detect project type, install the right scanner (ESLint for JS/TS, Bandit for Python, Semgrep for Java/C#), create minimal config, and run auto_scan to verify.",
         inputSchema: bootstrapScannerSchema,
       },
+      {
+        name: "list_projects",
+        description: "List all discovered sub-projects in the workspace. In a monorepo, returns each sub-project with its type, path, and recommended scanner.",
+        inputSchema: listProjectsSchema,
+      },
     ],
   }));
 
@@ -244,10 +289,20 @@ async function main(): Promise<void> {
   // The MCP SDK has already validated `args` against the tool's JSON
   // Schema by the time this handler runs, so we cast to the expected
   // shape without re-validating. Each branch delegates to a pure engine.
+  // Tool dispatch is split across two functions to keep cyclomatic
+  // complexity within the configured threshold (15) as the tool count
+  // grows. Each function handles a subset of tools.
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
     logger.info({ tool: name }, "Tool call received");
+    return handleToolCall(name, args);
+  });
 
+  /** Dispatch a tool call to the correct handler. */
+  async function handleToolCall(
+    name: string,
+    args: Record<string, unknown> | undefined,
+  ): Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }> {
     switch (name) {
       case "compute_crap": {
         const typed = args as {
@@ -343,12 +398,21 @@ async function main(): Promise<void> {
       }
 
       case "score_project": {
-        const typed = (args ?? {}) as { format?: "markdown" | "json" | "both" };
+        const typed = (args ?? {}) as { format?: "markdown" | "json" | "both"; scope?: string };
         const format = typed.format ?? "both";
+        // Resolve scope to a workspace subdirectory
+        let scoreRoot = config.pluginRoot;
+        if (typed.scope && projectMap) {
+          const project = projectMap.projects.find((p) => p.name === typed.scope);
+          if (project) {
+            const { join } = await import("node:path");
+            scoreRoot = join(config.pluginRoot, project.path);
+          }
+        }
         try {
-          const workspace = await estimateWorkspaceLoc(config.pluginRoot, { exclude: userExclusions });
+          const workspace = await estimateWorkspaceLoc(scoreRoot, { exclude: userExclusions });
           const score: ProjectScore = computeProjectScore({
-            workspaceRoot: config.pluginRoot,
+            workspaceRoot: scoreRoot,
             minutesPerLoc: config.minutesPerLoc,
             tdrMaxRating: config.tdrMaxRating,
             workspace: { physicalLoc: workspace.physicalLoc, fileCount: workspace.fileCount },
@@ -625,10 +689,29 @@ async function main(): Promise<void> {
         }
       }
 
+      case "list_projects": {
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  tool: "list_projects",
+                  isMonorepo: projectMap?.isMonorepo ?? false,
+                  projects: projectMap?.projects ?? [],
+                },
+                null,
+                2,
+              ),
+            },
+          ],
+        };
+      }
+
       default:
         throw new Error(`[claude-crap] Unknown tool: ${name}`);
     }
-  });
+  }
 
   // ------------------------------------------------------------------
   // Resources — topology and reports

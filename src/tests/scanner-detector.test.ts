@@ -153,9 +153,9 @@ describe("detectScanners", () => {
       // Config and package.json probes will all fail.
       // Binary probe results depend on the host — don't assert on those,
       // but do assert the structure is correct.
-      assert.equal(results.length, 5);
+      assert.equal(results.length, 6);
       for (const r of results) {
-        assert.ok(["eslint", "semgrep", "bandit", "stryker", "dart_analyze"].includes(r.scanner));
+        assert.ok(["eslint", "semgrep", "bandit", "stryker", "dart_analyze", "dotnet_format"].includes(r.scanner));
         assert.equal(typeof r.available, "boolean");
         assert.equal(typeof r.reason, "string");
       }
@@ -170,7 +170,7 @@ describe("detectScanners", () => {
       writeFileSync(join(dir, "package.json"), "not json at all");
       // Should not throw — just skip the package.json probe
       const results = await detectScanners(dir);
-      assert.equal(results.length, 5);
+      assert.equal(results.length, 6);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -195,7 +195,7 @@ describe("detectScanners", () => {
   it("SCANNER_SIGNALS covers all supported scanners", () => {
     assert.deepEqual(
       Object.keys(SCANNER_SIGNALS).sort(),
-      ["bandit", "dart_analyze", "eslint", "semgrep", "stryker"],
+      ["bandit", "dart_analyze", "dotnet_format", "eslint", "semgrep", "stryker"],
     );
   });
 });

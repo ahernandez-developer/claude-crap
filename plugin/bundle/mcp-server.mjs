@@ -2977,7 +2977,7 @@ var require_compile = __commonJS({
       const schOrFunc = root.refs[ref];
       if (schOrFunc)
         return schOrFunc;
-      let _sch = resolve7.call(this, root, ref);
+      let _sch = resolve8.call(this, root, ref);
       if (_sch === void 0) {
         const schema = (_a = root.localRefs) === null || _a === void 0 ? void 0 : _a[ref];
         const { schemaId } = this.opts;
@@ -3004,7 +3004,7 @@ var require_compile = __commonJS({
     function sameSchemaEnv(s1, s2) {
       return s1.schema === s2.schema && s1.root === s2.root && s1.baseId === s2.baseId;
     }
-    function resolve7(root, ref) {
+    function resolve8(root, ref) {
       let sch;
       while (typeof (sch = this.refs[ref]) == "string")
         ref = sch;
@@ -3579,7 +3579,7 @@ var require_fast_uri = __commonJS({
       }
       return uri;
     }
-    function resolve7(baseURI, relativeURI, options) {
+    function resolve8(baseURI, relativeURI, options) {
       const schemelessOptions = options ? Object.assign({ scheme: "null" }, options) : { scheme: "null" };
       const resolved = resolveComponent(parse(baseURI, schemelessOptions), parse(relativeURI, schemelessOptions), schemelessOptions, true);
       schemelessOptions.skipEscape = true;
@@ -3806,7 +3806,7 @@ var require_fast_uri = __commonJS({
     var fastUri = {
       SCHEMES,
       normalize,
-      resolve: resolve7,
+      resolve: resolve8,
       resolveComponent,
       equal,
       serialize,
@@ -6931,6 +6931,67 @@ function adaptDartAnalyzer(rawOutput) {
   };
 }
 
+// src/adapters/dotnet-format.ts
+function adaptDotnetFormat(rawOutput) {
+  let parsed;
+  if (typeof rawOutput === "string") {
+    try {
+      parsed = JSON.parse(rawOutput);
+    } catch {
+      throw new Error("[dotnet-format adapter] rawOutput is not valid JSON");
+    }
+  } else if (Array.isArray(rawOutput)) {
+    parsed = rawOutput;
+  } else {
+    throw new Error(
+      "[dotnet-format adapter] rawOutput must be a JSON string or an array of document entries"
+    );
+  }
+  if (!Array.isArray(parsed)) {
+    throw new Error("[dotnet-format adapter] parsed output must be an array");
+  }
+  const EFFORT_MINUTES = 5;
+  const results = [];
+  let findingCount = 0;
+  let totalEffortMinutes = 0;
+  for (const doc of parsed) {
+    if (!Array.isArray(doc.FileChanges)) continue;
+    for (const change of doc.FileChanges) {
+      findingCount++;
+      totalEffortMinutes += EFFORT_MINUTES;
+      results.push({
+        ruleId: change.DiagnosticId,
+        level: "warning",
+        message: {
+          text: change.FormatDescription
+        },
+        locations: [
+          {
+            physicalLocation: {
+              artifactLocation: {
+                uri: doc.FilePath
+              },
+              region: {
+                startLine: change.LineNumber,
+                startColumn: change.CharNumber
+              }
+            }
+          }
+        ],
+        properties: {
+          effortMinutes: EFFORT_MINUTES
+        }
+      });
+    }
+  }
+  return {
+    document: wrapResultsInSarif("dotnet_format", "1.0.0", results),
+    sourceTool: "dotnet_format",
+    findingCount,
+    totalEffortMinutes
+  };
+}
+
 // src/adapters/index.ts
 function adaptScannerOutput(scanner, rawOutput) {
   switch (scanner) {
@@ -6944,6 +7005,8 @@ function adaptScannerOutput(scanner, rawOutput) {
       return adaptStryker(rawOutput);
     case "dart_analyze":
       return adaptDartAnalyzer(rawOutput);
+    case "dotnet_format":
+      return adaptDotnetFormat(rawOutput);
     default: {
       const exhaustive = scanner;
       throw new Error(`[adapters] Unknown scanner: ${String(exhaustive)}`);
@@ -7698,7 +7761,7 @@ async function startDashboard(options) {
     root: publicRoot,
     prefix: "/"
   });
-  fastify.get("/api/health", async () => ({ status: "ok", server: "claude-crap", version: "0.3.8" }));
+  fastify.get("/api/health", async () => ({ status: "ok", server: "claude-crap", version: "0.4.0" }));
   fastify.get("/api/score", async () => {
     const stats = await workspaceStatsProvider();
     const score = await buildScore(config, sarifStore, stats, urlOf(fastify, config));
@@ -8373,6 +8436,7 @@ var CrapConfigError = class extends Error {
 function loadCrapConfig(options) {
   const fileResult = readFromFile(options.workspaceRoot);
   const exclude = fileResult?.exclude ?? [];
+  const projectDirs = fileResult?.projectDirs ?? [];
   const envRaw = process.env["CLAUDE_CRAP_STRICTNESS"];
   if (typeof envRaw === "string" && envRaw.trim() !== "") {
     const normalized = envRaw.trim().toLowerCase();
@@ -8381,12 +8445,12 @@ function loadCrapConfig(options) {
         `[crap-config] CLAUDE_CRAP_STRICTNESS="${envRaw}" is not a valid strictness. Expected one of: ${STRICTNESS_VALUES.join(", ")}.`
       );
     }
-    return { strictness: normalized, strictnessSource: "env", exclude };
+    return { strictness: normalized, strictnessSource: "env", exclude, projectDirs };
   }
   if (fileResult?.strictness) {
-    return { strictness: fileResult.strictness, strictnessSource: "file", exclude };
+    return { strictness: fileResult.strictness, strictnessSource: "file", exclude, projectDirs };
   }
-  return { strictness: DEFAULT_STRICTNESS, strictnessSource: "default", exclude };
+  return { strictness: DEFAULT_STRICTNESS, strictnessSource: "default", exclude, projectDirs };
 }
 function readFromFile(workspaceRoot) {
   const filePath = join5(workspaceRoot, ".claude-crap.json");
@@ -8447,7 +8511,24 @@ function readFromFile(workspaceRoot) {
     }
     exclude = raw2;
   }
-  return { strictness, exclude };
+  let projectDirs = [];
+  if ("projectDirs" in doc) {
+    const raw2 = doc["projectDirs"];
+    if (!Array.isArray(raw2)) {
+      throw new CrapConfigError(
+        `[crap-config] ${filePath}: 'projectDirs' must be an array of strings`
+      );
+    }
+    for (const item of raw2) {
+      if (typeof item !== "string") {
+        throw new CrapConfigError(
+          `[crap-config] ${filePath}: every entry in 'projectDirs' must be a string, got ${typeof item}`
+        );
+      }
+    }
+    projectDirs = raw2;
+  }
+  return { strictness, exclude, projectDirs };
 }
 function isStrictness(value) {
   return STRICTNESS_VALUES.includes(value);
@@ -8580,6 +8661,11 @@ var SCANNER_SIGNALS = {
     ],
     packageJsonKeys: [],
     binaryNames: ["dart"]
+  },
+  dotnet_format: {
+    configFiles: [],
+    packageJsonKeys: [],
+    binaryNames: ["dotnet"]
   }
 };
 function probeConfigFiles(workspaceRoot, scanner) {
@@ -8610,14 +8696,14 @@ function probePackageJson(workspaceRoot, scanner) {
   }
 }
 function probeBinary(binaryName) {
-  return new Promise((resolve7) => {
+  return new Promise((resolve8) => {
     execFile("which", [binaryName], { timeout: 5e3 }, (err) => {
-      resolve7(err === null);
+      resolve8(err === null);
     });
   });
 }
 async function detectScanners(workspaceRoot) {
-  const scanners = ["eslint", "semgrep", "bandit", "stryker", "dart_analyze"];
+  const scanners = ["eslint", "semgrep", "bandit", "stryker", "dart_analyze", "dotnet_format"];
   const results = await Promise.all(
     scanners.map(async (scanner) => {
       const configProbe = probeConfigFiles(workspaceRoot, scanner);
@@ -8689,7 +8775,7 @@ async function detectMonorepoScanners(workspaceRoot) {
   }
   if (subdirs.size === 0) return [];
   const detections = [];
-  const scanners = ["eslint", "semgrep", "bandit", "stryker", "dart_analyze"];
+  const scanners = ["eslint", "semgrep", "bandit", "stryker", "dart_analyze", "dotnet_format"];
   for (const subdir of subdirs) {
     for (const scanner of scanners) {
       const configProbe = probeConfigFiles(subdir, scanner);
@@ -8754,13 +8840,26 @@ function getScannerCommand(scanner, workspaceRoot) {
         nonZeroIsNormal: true
         // exits 3 when findings exist
       };
+    case "dotnet_format":
+      return {
+        command: "dotnet",
+        args: [
+          "format",
+          "--verify-no-changes",
+          "--report",
+          join8(workspaceRoot, ".claude-crap", "dotnet-report.json")
+        ],
+        timeoutMs: 12e4,
+        nonZeroIsNormal: true,
+        outputFile: join8(workspaceRoot, ".claude-crap", "dotnet-report.json")
+      };
   }
 }
 function runScanner(scanner, workspaceRoot, options) {
   const start = Date.now();
   const cwd = options?.workingDir ?? workspaceRoot;
   const cmd = getScannerCommand(scanner, cwd);
-  return new Promise((resolve7) => {
+  return new Promise((resolve8) => {
     execFile2(
       cmd.command,
       cmd.args,
@@ -8779,7 +8878,7 @@ function runScanner(scanner, workspaceRoot, options) {
           if (cmd.outputFile && existsSync3(cmd.outputFile)) {
             try {
               const fileOutput = readFileSync4(cmd.outputFile, "utf-8");
-              resolve7({
+              resolve8({
                 scanner,
                 success: true,
                 rawOutput: fileOutput,
@@ -8789,7 +8888,7 @@ function runScanner(scanner, workspaceRoot, options) {
             } catch {
             }
           }
-          resolve7({
+          resolve8({
             scanner,
             success: false,
             rawOutput: "",
@@ -8802,7 +8901,7 @@ function runScanner(scanner, workspaceRoot, options) {
           if (existsSync3(cmd.outputFile)) {
             try {
               const fileOutput = readFileSync4(cmd.outputFile, "utf-8");
-              resolve7({
+              resolve8({
                 scanner,
                 success: true,
                 rawOutput: fileOutput,
@@ -8810,7 +8909,7 @@ function runScanner(scanner, workspaceRoot, options) {
               });
               return;
             } catch (readErr) {
-              resolve7({
+              resolve8({
                 scanner,
                 success: false,
                 rawOutput: "",
@@ -8820,7 +8919,7 @@ function runScanner(scanner, workspaceRoot, options) {
               return;
             }
           }
-          resolve7({
+          resolve8({
             scanner,
             success: false,
             rawOutput: "",
@@ -8831,7 +8930,7 @@ function runScanner(scanner, workspaceRoot, options) {
         }
         const output = stdout.trim();
         if (!output) {
-          resolve7({
+          resolve8({
             scanner,
             success: true,
             rawOutput: "[]",
@@ -8840,7 +8939,7 @@ function runScanner(scanner, workspaceRoot, options) {
           });
           return;
         }
-        resolve7({
+        resolve8({
           scanner,
           success: true,
           rawOutput: output,
@@ -8917,7 +9016,7 @@ export default [
 `;
 }
 function npmInstall(workspaceRoot, packages) {
-  return new Promise((resolve7) => {
+  return new Promise((resolve8) => {
     execFile3(
       "npm",
       ["install", "--save-dev", ...packages],
@@ -8928,14 +9027,14 @@ function npmInstall(workspaceRoot, packages) {
       },
       (err, stdout, stderr) => {
         if (err) {
-          resolve7({
+          resolve8({
             action: `npm install --save-dev ${packages.join(" ")}`,
             success: false,
             detail: stderr || err.message
           });
           return;
         }
-        resolve7({
+        resolve8({
           action: `npm install --save-dev ${packages.join(" ")}`,
           success: true,
           detail: `installed ${packages.join(", ")}`
@@ -8984,11 +9083,16 @@ function getRecommendation(projectType) {
         installInstructions: "pip install bandit  (or: pipx install bandit, poetry add --group dev bandit)"
       };
     case "java":
-    case "csharp":
       return {
         scanner: "semgrep",
         canAutoInstall: false,
         installInstructions: "brew install semgrep  (or: pip install semgrep, pipx install semgrep)"
+      };
+    case "csharp":
+      return {
+        scanner: "dotnet_format",
+        canAutoInstall: false,
+        installInstructions: "Install the .NET SDK: https://dotnet.microsoft.com/download"
       };
     case "dart":
       return {
@@ -9437,6 +9541,192 @@ async function autoScan(workspaceRoot, sarifStore, logger2, options) {
   };
 }
 
+// src/monorepo/project-map.ts
+import { existsSync as existsSync6, readFileSync as readFileSync5, readdirSync as readdirSync3 } from "node:fs";
+import { promises as fs8 } from "node:fs";
+import { join as join12, basename as basename2, resolve as resolve7 } from "node:path";
+import { execFile as execFile4 } from "node:child_process";
+var MONOREPO_DIRS2 = ["apps", "packages", "libs", "modules", "services"];
+var SCANNER_FOR_TYPE = {
+  typescript: "eslint",
+  javascript: "eslint",
+  python: "bandit",
+  java: "semgrep",
+  csharp: "dotnet_format",
+  dart: "dart_analyze",
+  unknown: null
+};
+var BINARY_FOR_SCANNER = {
+  eslint: "eslint",
+  bandit: "bandit",
+  semgrep: "semgrep",
+  dart_analyze: "dart",
+  dotnet_format: "dotnet"
+};
+function probeBinary2(binaryName) {
+  return new Promise((resolve8) => {
+    execFile4("which", [binaryName], { timeout: 5e3 }, (err) => {
+      resolve8(err === null);
+    });
+  });
+}
+function detectProjectType2(dir) {
+  const has = (file) => existsSync6(join12(dir, file));
+  if (has("pubspec.yaml")) return "dart";
+  if (has("package.json")) {
+    if (has("tsconfig.json")) return "typescript";
+    return "javascript";
+  }
+  if (has("pyproject.toml") || has("setup.py") || has("requirements.txt")) {
+    return "python";
+  }
+  if (has("pom.xml") || has("build.gradle") || has("build.gradle.kts")) {
+    return "java";
+  }
+  if (has("Directory.Build.props")) return "csharp";
+  try {
+    const entries = readdirSync3(dir);
+    if (entries.some((e) => e.endsWith(".csproj") || e.endsWith(".sln"))) {
+      return "csharp";
+    }
+  } catch {
+  }
+  return "unknown";
+}
+function extractWorkspacePatterns(workspaces) {
+  if (Array.isArray(workspaces)) {
+    return workspaces.filter((v) => typeof v === "string");
+  }
+  if (workspaces !== null && typeof workspaces === "object" && "packages" in workspaces && Array.isArray(workspaces.packages)) {
+    return workspaces.packages.filter(
+      (v) => typeof v === "string"
+    );
+  }
+  return [];
+}
+function expandWorkspacePattern(workspaceRoot, pattern) {
+  if (pattern.endsWith("/*")) {
+    const parentDir = join12(workspaceRoot, pattern.slice(0, -2));
+    try {
+      const entries = readdirSync3(parentDir, { withFileTypes: true });
+      return entries.filter((e) => e.isDirectory() && !e.name.startsWith(".")).map((e) => join12(parentDir, e.name));
+    } catch {
+      return [];
+    }
+  }
+  const full = resolve7(workspaceRoot, pattern);
+  try {
+    const entries = readdirSync3(full, { withFileTypes: true });
+    void entries;
+    return [full];
+  } catch {
+    return [];
+  }
+}
+function collectSubdirectories(workspaceRoot, extraDirs) {
+  const subdirs = /* @__PURE__ */ new Set();
+  const pkgPath = join12(workspaceRoot, "package.json");
+  if (existsSync6(pkgPath)) {
+    try {
+      const raw = readFileSync5(pkgPath, "utf-8");
+      const pkg = JSON.parse(raw);
+      const patterns = extractWorkspacePatterns(pkg["workspaces"]);
+      for (const pattern of patterns) {
+        for (const absPath of expandWorkspacePattern(workspaceRoot, pattern)) {
+          subdirs.add(absPath);
+        }
+      }
+    } catch {
+    }
+  }
+  if (extraDirs && extraDirs.length > 0) {
+    for (const dir of extraDirs) {
+      const absDir = resolve7(workspaceRoot, dir);
+      if (!existsSync6(absDir)) continue;
+      const hasMarker = PROJECT_MARKERS.some((m) => existsSync6(join12(absDir, m)));
+      if (hasMarker) {
+        subdirs.add(absDir);
+        continue;
+      }
+      try {
+        const entries = readdirSync3(absDir, { withFileTypes: true });
+        for (const entry of entries) {
+          if (entry.isDirectory() && !entry.name.startsWith(".")) {
+            subdirs.add(join12(absDir, entry.name));
+          }
+        }
+      } catch {
+      }
+    }
+  }
+  const configuredDirNames = new Set(extraDirs?.map((d) => d.split("/")[0]) ?? []);
+  for (const dir of MONOREPO_DIRS2) {
+    if (configuredDirNames.has(dir)) continue;
+    const parentDir = join12(workspaceRoot, dir);
+    try {
+      const entries = readdirSync3(parentDir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.isDirectory() && !entry.name.startsWith(".")) {
+          subdirs.add(join12(parentDir, entry.name));
+        }
+      }
+    } catch {
+    }
+  }
+  return subdirs;
+}
+var PROJECT_MARKERS = [
+  "package.json",
+  "pubspec.yaml",
+  "pyproject.toml",
+  "setup.py",
+  "pom.xml",
+  "build.gradle",
+  "build.gradle.kts",
+  "Directory.Build.props"
+];
+async function discoverProjectMap(workspaceRoot, options) {
+  const subdirs = collectSubdirectories(workspaceRoot, options?.projectDirs);
+  const binaryCache = /* @__PURE__ */ new Map();
+  const probeScanner = (scanner) => {
+    const binaryName = BINARY_FOR_SCANNER[scanner];
+    if (binaryName === void 0) return Promise.resolve(false);
+    const cached = binaryCache.get(scanner);
+    if (cached !== void 0) return cached;
+    const probe = probeBinary2(binaryName);
+    binaryCache.set(scanner, probe);
+    return probe;
+  };
+  const projectEntries = await Promise.all(
+    [...subdirs].map(async (absPath) => {
+      const relPath = absPath.replace(workspaceRoot + "/", "");
+      const type = detectProjectType2(absPath);
+      const scanner = SCANNER_FOR_TYPE[type];
+      const scannerAvailable = scanner !== null ? await probeScanner(scanner) : false;
+      return {
+        name: basename2(absPath),
+        path: relPath,
+        type,
+        scanner,
+        scannerAvailable
+      };
+    })
+  );
+  projectEntries.sort((a, b) => a.path.localeCompare(b.path));
+  return {
+    generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+    workspaceRoot,
+    isMonorepo: projectEntries.length > 0,
+    projects: projectEntries
+  };
+}
+async function persistProjectMap(map, workspaceRoot) {
+  const dir = join12(workspaceRoot, ".claude-crap");
+  await fs8.mkdir(dir, { recursive: true });
+  const filePath = join12(dir, "projects.json");
+  await fs8.writeFile(filePath, JSON.stringify(map, null, 2) + "\n", "utf-8");
+}
+
 // src/schemas/tool-schemas.ts
 var computeCrapSchema = {
   type: "object",
@@ -9527,8 +9817,19 @@ var scoreProjectSchema = {
       type: "string",
       enum: ["markdown", "json", "both"],
       description: "Output format. `markdown` returns only the chat summary, `json` returns only the structured snapshot, `both` (default) returns both as separate content blocks."
+    },
+    scope: {
+      type: "string",
+      description: "Optional project name from the project map. When provided, the score is computed only for files within that project's subtree. Omit to score the entire workspace."
     }
   },
+  required: [],
+  additionalProperties: false
+};
+var listProjectsSchema = {
+  type: "object",
+  description: "List all discovered sub-projects in the workspace. In a monorepo, returns each sub-project with its type, path, and recommended scanner. In a single-project workspace, returns an empty list.",
+  properties: {},
   required: [],
   additionalProperties: false
 };
@@ -9553,7 +9854,7 @@ var ingestScannerOutputSchema = {
   properties: {
     scanner: {
       type: "string",
-      enum: ["semgrep", "eslint", "bandit", "stryker", "dart_analyze"],
+      enum: ["semgrep", "eslint", "bandit", "stryker", "dart_analyze", "dotnet_format"],
       description: "Identifier of the producing scanner."
     },
     rawOutput: {
@@ -9614,11 +9915,16 @@ async function main() {
     "claude-crap MCP server starting"
   );
   let userExclusions = [];
+  let userProjectDirs = [];
   try {
     const crapConfig = loadCrapConfig({ workspaceRoot: config.pluginRoot });
     userExclusions = crapConfig.exclude;
+    userProjectDirs = crapConfig.projectDirs;
     if (userExclusions.length > 0) {
       logger.info({ exclude: userExclusions }, "user exclusions loaded from .claude-crap.json");
+    }
+    if (userProjectDirs.length > 0) {
+      logger.info({ projectDirs: userProjectDirs }, "user projectDirs loaded from .claude-crap.json");
     }
   } catch {
   }
@@ -9632,6 +9938,32 @@ async function main() {
     { findings: sarifStore.size(), path: sarifStore.consolidatedReportPath },
     "SARIF store ready"
   );
+  let projectMap = null;
+  try {
+    projectMap = await discoverProjectMap(config.pluginRoot, { projectDirs: userProjectDirs });
+    if (projectMap.isMonorepo) {
+      logger.info(
+        { projects: projectMap.projects.map((p) => `${p.name}(${p.type})`), count: projectMap.projects.length },
+        "monorepo project map discovered"
+      );
+      await persistProjectMap(projectMap, config.pluginRoot);
+      const needsEslint = projectMap.projects.some(
+        (p) => (p.type === "typescript" || p.type === "javascript") && !p.scannerAvailable
+      );
+      if (needsEslint) {
+        logger.info("monorepo: JS/TS projects detected but ESLint not installed \u2014 bootstrapping");
+        try {
+          await bootstrapScanner(config.pluginRoot, sarifStore, logger);
+          projectMap = await discoverProjectMap(config.pluginRoot, { projectDirs: userProjectDirs });
+          await persistProjectMap(projectMap, config.pluginRoot);
+        } catch (err) {
+          logger.warn({ err: err.message }, "monorepo ESLint bootstrap failed");
+        }
+      }
+    }
+  } catch (err) {
+    logger.warn({ err: err.message }, "project map discovery failed");
+  }
   let dashboard = null;
   try {
     dashboard = await startDashboard({
@@ -9718,12 +10050,20 @@ async function main() {
         name: "bootstrap_scanner",
         description: "Detect project type, install the right scanner (ESLint for JS/TS, Bandit for Python, Semgrep for Java/C#), create minimal config, and run auto_scan to verify.",
         inputSchema: bootstrapScannerSchema
+      },
+      {
+        name: "list_projects",
+        description: "List all discovered sub-projects in the workspace. In a monorepo, returns each sub-project with its type, path, and recommended scanner.",
+        inputSchema: listProjectsSchema
       }
     ]
   }));
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
     logger.info({ tool: name }, "Tool call received");
+    return handleToolCall(name, args);
+  });
+  async function handleToolCall(name, args) {
     switch (name) {
       case "compute_crap": {
         const typed = args;
@@ -9809,10 +10149,18 @@ async function main() {
       case "score_project": {
         const typed = args ?? {};
         const format = typed.format ?? "both";
+        let scoreRoot = config.pluginRoot;
+        if (typed.scope && projectMap) {
+          const project = projectMap.projects.find((p) => p.name === typed.scope);
+          if (project) {
+            const { join: join13 } = await import("node:path");
+            scoreRoot = join13(config.pluginRoot, project.path);
+          }
+        }
         try {
-          const workspace = await estimateWorkspaceLoc(config.pluginRoot, { exclude: userExclusions });
+          const workspace = await estimateWorkspaceLoc(scoreRoot, { exclude: userExclusions });
           const score = computeProjectScore({
-            workspaceRoot: config.pluginRoot,
+            workspaceRoot: scoreRoot,
             minutesPerLoc: config.minutesPerLoc,
             tdrMaxRating: config.tdrMaxRating,
             workspace: { physicalLoc: workspace.physicalLoc, fileCount: workspace.fileCount },
@@ -10060,10 +10408,28 @@ async function main() {
           };
         }
       }
+      case "list_projects": {
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  tool: "list_projects",
+                  isMonorepo: projectMap?.isMonorepo ?? false,
+                  projects: projectMap?.projects ?? []
+                },
+                null,
+                2
+              )
+            }
+          ]
+        };
+      }
       default:
         throw new Error(`[claude-crap] Unknown tool: ${name}`);
     }
-  });
+  }
   server.setRequestHandler(ListResourcesRequestSchema, async () => ({
     resources: [
       {

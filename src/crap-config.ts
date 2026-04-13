@@ -83,6 +83,8 @@ export interface CrapConfig {
   readonly strictnessSource: "env" | "file" | "default";
   /** User-defined exclusion patterns (directories with trailing `/`, or file globs). */
   readonly exclude: ReadonlyArray<string>;
+  /** Relative paths to directories containing sub-projects (e.g. `["apps", "packages"]`). */
+  readonly projectDirs: ReadonlyArray<string>;
 }
 
 /**
@@ -113,6 +115,7 @@ export function loadCrapConfig(options: LoadCrapConfigOptions): CrapConfig {
   // comes from the environment variable.
   const fileResult = readFromFile(options.workspaceRoot);
   const exclude = fileResult?.exclude ?? [];
+  const projectDirs = fileResult?.projectDirs ?? [];
 
   const envRaw = process.env["CLAUDE_CRAP_STRICTNESS"];
   if (typeof envRaw === "string" && envRaw.trim() !== "") {
@@ -123,14 +126,14 @@ export function loadCrapConfig(options: LoadCrapConfigOptions): CrapConfig {
           `Expected one of: ${STRICTNESS_VALUES.join(", ")}.`,
       );
     }
-    return { strictness: normalized, strictnessSource: "env", exclude };
+    return { strictness: normalized, strictnessSource: "env", exclude, projectDirs };
   }
 
   if (fileResult?.strictness) {
-    return { strictness: fileResult.strictness, strictnessSource: "file", exclude };
+    return { strictness: fileResult.strictness, strictnessSource: "file", exclude, projectDirs };
   }
 
-  return { strictness: DEFAULT_STRICTNESS, strictnessSource: "default", exclude };
+  return { strictness: DEFAULT_STRICTNESS, strictnessSource: "default", exclude, projectDirs };
 }
 
 /**
@@ -149,6 +152,7 @@ export function loadCrapConfig(options: LoadCrapConfigOptions): CrapConfig {
 interface FileResult {
   strictness: Strictness | null;
   exclude: string[];
+  projectDirs: string[];
 }
 
 function readFromFile(workspaceRoot: string): FileResult | null {
@@ -218,7 +222,26 @@ function readFromFile(workspaceRoot: string): FileResult | null {
     exclude = raw as string[];
   }
 
-  return { strictness, exclude };
+  // Parse projectDirs
+  let projectDirs: string[] = [];
+  if ("projectDirs" in doc) {
+    const raw = doc["projectDirs"];
+    if (!Array.isArray(raw)) {
+      throw new CrapConfigError(
+        `[crap-config] ${filePath}: 'projectDirs' must be an array of strings`,
+      );
+    }
+    for (const item of raw) {
+      if (typeof item !== "string") {
+        throw new CrapConfigError(
+          `[crap-config] ${filePath}: every entry in 'projectDirs' must be a string, got ${typeof item}`,
+        );
+      }
+    }
+    projectDirs = raw as string[];
+  }
+
+  return { strictness, exclude, projectDirs };
 }
 
 /**

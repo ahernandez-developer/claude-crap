@@ -23,7 +23,7 @@ import type { SarifLevel } from "../sarif/sarif-builder.js";
  * `ingest_scanner_output` MCP tool uses this as its `enum` constraint,
  * so keeping it narrow prevents drift.
  */
-export const KNOWN_SCANNERS = ["semgrep", "eslint", "bandit", "stryker", "dart_analyze"] as const;
+export const KNOWN_SCANNERS = ["semgrep", "eslint", "bandit", "stryker", "dart_analyze", "dotnet_format"] as const;
 
 /**
  * Union of supported scanner identifiers.

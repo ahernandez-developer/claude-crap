@@ -95,6 +95,6 @@ describe("adaptScannerOutput", () => {
   });
 
   it("KNOWN_SCANNERS is frozen and contains all supported names", () => {
-    assert.deepEqual([...KNOWN_SCANNERS].sort(), ["bandit", "dart_analyze", "eslint", "semgrep", "stryker"]);
+    assert.deepEqual([...KNOWN_SCANNERS].sort(), ["bandit", "dart_analyze", "dotnet_format", "eslint", "semgrep", "stryker"]);
   });
 });
