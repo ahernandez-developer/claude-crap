@@ -10061,6 +10061,9 @@ async function main() {
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
     logger.info({ tool: name }, "Tool call received");
+    return handleToolCall(name, args);
+  });
+  async function handleToolCall(name, args) {
     switch (name) {
       case "compute_crap": {
         const typed = args;
@@ -10426,7 +10429,7 @@ async function main() {
       default:
         throw new Error(`[claude-crap] Unknown tool: ${name}`);
     }
-  });
+  }
   server.setRequestHandler(ListResourcesRequestSchema, async () => ({
     resources: [
       {
