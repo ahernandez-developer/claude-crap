@@ -270,12 +270,18 @@ function getRecommendation(projectType: ProjectType): ScannerRecommendation {
           "pip install bandit  (or: pipx install bandit, poetry add --group dev bandit)",
       };
     case "java":
-    case "csharp":
       return {
         scanner: "semgrep",
         canAutoInstall: false,
         installInstructions:
           "brew install semgrep  (or: pip install semgrep, pipx install semgrep)",
+      };
+    case "csharp":
+      return {
+        scanner: "dotnet_format",
+        canAutoInstall: false,
+        installInstructions:
+          "Install the .NET SDK: https://dotnet.microsoft.com/download",
       };
     case "dart":
       return {

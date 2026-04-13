@@ -232,7 +232,7 @@ describe("MCP server integration", { skip: !serverBuilt }, () => {
     assert.ok(child && !child.killed, "server child should be running");
   });
 
-  it("exposes all ten tools via tools/list", async () => {
+  it("exposes all eleven tools via tools/list", async () => {
     const response = await client!.request<{ result?: { tools?: Array<{ name: string }> } }>(
       "tools/list",
     );

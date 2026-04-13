@@ -98,6 +98,19 @@ function getScannerCommand(
         timeoutMs: 120_000,
         nonZeroIsNormal: true, // exits 3 when findings exist
       };
+    case "dotnet_format":
+      return {
+        command: "dotnet",
+        args: [
+          "format",
+          "--verify-no-changes",
+          "--report",
+          join(workspaceRoot, ".claude-crap", "dotnet-report.json"),
+        ],
+        timeoutMs: 120_000,
+        nonZeroIsNormal: true,
+        outputFile: join(workspaceRoot, ".claude-crap", "dotnet-report.json"),
+      };
   }
 }
 

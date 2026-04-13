@@ -31,6 +31,7 @@ export { adaptEslint } from "./eslint.js";
 export { adaptBandit } from "./bandit.js";
 export { adaptStryker } from "./stryker.js";
 export { adaptDartAnalyzer } from "./dart-analyzer.js";
+export { adaptDotnetFormat } from "./dotnet-format.js";
 
 export {
   DEFAULT_EFFORT_BY_SEVERITY,
@@ -46,6 +47,7 @@ import { adaptEslint } from "./eslint.js";
 import { adaptBandit } from "./bandit.js";
 import { adaptStryker } from "./stryker.js";
 import { adaptDartAnalyzer } from "./dart-analyzer.js";
+import { adaptDotnetFormat } from "./dotnet-format.js";
 import type { AdapterResult, KnownScanner } from "./common.js";
 
 /**
@@ -74,6 +76,8 @@ export function adaptScannerOutput(
       return adaptStryker(rawOutput);
     case "dart_analyze":
       return adaptDartAnalyzer(rawOutput);
+    case "dotnet_format":
+      return adaptDotnetFormat(rawOutput);
     default: {
       const exhaustive: never = scanner;
       throw new Error(`[adapters] Unknown scanner: ${String(exhaustive)}`);

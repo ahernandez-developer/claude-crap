@@ -164,7 +164,7 @@ describe("discoverProjectMap", () => {
     }
   });
 
-  it("Java project is detected with type 'java' and scanner 'semgrep'", async () => {
+  it("Java project is detected with type 'java' and scanner 'dotnet_format'", async () => {
     const dir = makeTmpDir();
     try {
       writeFileSync(
@@ -188,7 +188,7 @@ describe("discoverProjectMap", () => {
     }
   });
 
-  it("C# project is detected with type 'csharp' and scanner 'semgrep'", async () => {
+  it("C# project is detected with type 'csharp' and scanner 'dotnet_format'", async () => {
     const dir = makeTmpDir();
     try {
       writeFileSync(
@@ -206,7 +206,7 @@ describe("discoverProjectMap", () => {
 
       const api = findProject(map, "apps/api");
       assert.equal(api.type, "csharp");
-      assert.equal(api.scanner, "semgrep");
+      assert.equal(api.scanner, "dotnet_format");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

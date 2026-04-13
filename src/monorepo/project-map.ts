@@ -95,7 +95,7 @@ const SCANNER_FOR_TYPE: Record<ProjectType, string | null> = {
   javascript: "eslint",
   python: "bandit",
   java: "semgrep",
-  csharp: "semgrep",
+  csharp: "dotnet_format",
   dart: "dart_analyze",
   unknown: null,
 };
@@ -110,6 +110,7 @@ const BINARY_FOR_SCANNER: Record<string, string> = {
   bandit: "bandit",
   semgrep: "semgrep",
   dart_analyze: "dart",
+  dotnet_format: "dotnet",
 };
 
 // ── Binary probe ───────────────────────────────────────────────────────────

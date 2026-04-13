@@ -6931,6 +6931,67 @@ function adaptDartAnalyzer(rawOutput) {
   };
 }
 
+// src/adapters/dotnet-format.ts
+function adaptDotnetFormat(rawOutput) {
+  let parsed;
+  if (typeof rawOutput === "string") {
+    try {
+      parsed = JSON.parse(rawOutput);
+    } catch {
+      throw new Error("[dotnet-format adapter] rawOutput is not valid JSON");
+    }
+  } else if (Array.isArray(rawOutput)) {
+    parsed = rawOutput;
+  } else {
+    throw new Error(
+      "[dotnet-format adapter] rawOutput must be a JSON string or an array of document entries"
+    );
+  }
+  if (!Array.isArray(parsed)) {
+    throw new Error("[dotnet-format adapter] parsed output must be an array");
+  }
+  const EFFORT_MINUTES = 5;
+  const results = [];
+  let findingCount = 0;
+  let totalEffortMinutes = 0;
+  for (const doc of parsed) {
+    if (!Array.isArray(doc.FileChanges)) continue;
+    for (const change of doc.FileChanges) {
+      findingCount++;
+      totalEffortMinutes += EFFORT_MINUTES;
+      results.push({
+        ruleId: change.DiagnosticId,
+        level: "warning",
+        message: {
+          text: change.FormatDescription
+        },
+        locations: [
+          {
+            physicalLocation: {
+              artifactLocation: {
+                uri: doc.FilePath
+              },
+              region: {
+                startLine: change.LineNumber,
+                startColumn: change.CharNumber
+              }
+            }
+          }
+        ],
+        properties: {
+          effortMinutes: EFFORT_MINUTES
+        }
+      });
+    }
+  }
+  return {
+    document: wrapResultsInSarif("dotnet_format", "1.0.0", results),
+    sourceTool: "dotnet_format",
+    findingCount,
+    totalEffortMinutes
+  };
+}
+
 // src/adapters/index.ts
 function adaptScannerOutput(scanner, rawOutput) {
   switch (scanner) {
@@ -6944,6 +7005,8 @@ function adaptScannerOutput(scanner, rawOutput) {
       return adaptStryker(rawOutput);
     case "dart_analyze":
       return adaptDartAnalyzer(rawOutput);
+    case "dotnet_format":
+      return adaptDotnetFormat(rawOutput);
     default: {
       const exhaustive = scanner;
       throw new Error(`[adapters] Unknown scanner: ${String(exhaustive)}`);
@@ -8580,6 +8643,11 @@ var SCANNER_SIGNALS = {
     ],
     packageJsonKeys: [],
     binaryNames: ["dart"]
+  },
+  dotnet_format: {
+    configFiles: [],
+    packageJsonKeys: [],
+    binaryNames: ["dotnet"]
   }
 };
 function probeConfigFiles(workspaceRoot, scanner) {
@@ -8617,7 +8685,7 @@ function probeBinary(binaryName) {
   });
 }
 async function detectScanners(workspaceRoot) {
-  const scanners = ["eslint", "semgrep", "bandit", "stryker", "dart_analyze"];
+  const scanners = ["eslint", "semgrep", "bandit", "stryker", "dart_analyze", "dotnet_format"];
   const results = await Promise.all(
     scanners.map(async (scanner) => {
       const configProbe = probeConfigFiles(workspaceRoot, scanner);
@@ -8689,7 +8757,7 @@ async function detectMonorepoScanners(workspaceRoot) {
   }
   if (subdirs.size === 0) return [];
   const detections = [];
-  const scanners = ["eslint", "semgrep", "bandit", "stryker", "dart_analyze"];
+  const scanners = ["eslint", "semgrep", "bandit", "stryker", "dart_analyze", "dotnet_format"];
   for (const subdir of subdirs) {
     for (const scanner of scanners) {
       const configProbe = probeConfigFiles(subdir, scanner);
@@ -8753,6 +8821,19 @@ function getScannerCommand(scanner, workspaceRoot) {
         timeoutMs: 12e4,
         nonZeroIsNormal: true
         // exits 3 when findings exist
+      };
+    case "dotnet_format":
+      return {
+        command: "dotnet",
+        args: [
+          "format",
+          "--verify-no-changes",
+          "--report",
+          join8(workspaceRoot, ".claude-crap", "dotnet-report.json")
+        ],
+        timeoutMs: 12e4,
+        nonZeroIsNormal: true,
+        outputFile: join8(workspaceRoot, ".claude-crap", "dotnet-report.json")
       };
   }
 }
@@ -8984,11 +9065,16 @@ function getRecommendation(projectType) {
         installInstructions: "pip install bandit  (or: pipx install bandit, poetry add --group dev bandit)"
       };
     case "java":
-    case "csharp":
       return {
         scanner: "semgrep",
         canAutoInstall: false,
         installInstructions: "brew install semgrep  (or: pip install semgrep, pipx install semgrep)"
+      };
+    case "csharp":
+      return {
+        scanner: "dotnet_format",
+        canAutoInstall: false,
+        installInstructions: "Install the .NET SDK: https://dotnet.microsoft.com/download"
       };
     case "dart":
       return {
@@ -9448,7 +9534,7 @@ var SCANNER_FOR_TYPE = {
   javascript: "eslint",
   python: "bandit",
   java: "semgrep",
-  csharp: "semgrep",
+  csharp: "dotnet_format",
   dart: "dart_analyze",
   unknown: null
 };
@@ -9456,7 +9542,8 @@ var BINARY_FOR_SCANNER = {
   eslint: "eslint",
   bandit: "bandit",
   semgrep: "semgrep",
-  dart_analyze: "dart"
+  dart_analyze: "dart",
+  dotnet_format: "dotnet"
 };
 function probeBinary2(binaryName) {
   return new Promise((resolve8) => {
@@ -9717,7 +9804,7 @@ var ingestScannerOutputSchema = {
   properties: {
     scanner: {
       type: "string",
-      enum: ["semgrep", "eslint", "bandit", "stryker", "dart_analyze"],
+      enum: ["semgrep", "eslint", "bandit", "stryker", "dart_analyze", "dotnet_format"],
       description: "Identifier of the producing scanner."
     },
     rawOutput: {

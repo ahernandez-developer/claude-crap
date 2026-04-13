@@ -108,6 +108,11 @@ const SCANNER_SIGNALS: Record<KnownScanner, ScannerSignals> = {
     packageJsonKeys: [],
     binaryNames: ["dart"],
   },
+  dotnet_format: {
+    configFiles: [],
+    packageJsonKeys: [],
+    binaryNames: ["dotnet"],
+  },
 };
 
 // ── Probes ──────────────────────────────────────────────────────────
@@ -183,7 +188,7 @@ function probeBinary(binaryName: string): Promise<boolean> {
 export async function detectScanners(
   workspaceRoot: string,
 ): Promise<ScannerDetection[]> {
-  const scanners: KnownScanner[] = ["eslint", "semgrep", "bandit", "stryker", "dart_analyze"];
+  const scanners: KnownScanner[] = ["eslint", "semgrep", "bandit", "stryker", "dart_analyze", "dotnet_format"];
 
   const results = await Promise.all(
     scanners.map(async (scanner): Promise<ScannerDetection> => {
@@ -297,7 +302,7 @@ export async function detectMonorepoScanners(
 
   // 3. Probe each subdirectory for scanner config files
   const detections: ScannerDetection[] = [];
-  const scanners: KnownScanner[] = ["eslint", "semgrep", "bandit", "stryker", "dart_analyze"];
+  const scanners: KnownScanner[] = ["eslint", "semgrep", "bandit", "stryker", "dart_analyze", "dotnet_format"];
 
   for (const subdir of subdirs) {
     for (const scanner of scanners) {

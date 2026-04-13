@@ -197,7 +197,7 @@ export const ingestScannerOutputSchema = {
   properties: {
     scanner: {
       type: "string",
-      enum: ["semgrep", "eslint", "bandit", "stryker", "dart_analyze"],
+      enum: ["semgrep", "eslint", "bandit", "stryker", "dart_analyze", "dotnet_format"],
       description: "Identifier of the producing scanner.",
     },
     rawOutput: {
