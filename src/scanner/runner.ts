@@ -91,6 +91,13 @@ function getScannerCommand(
         nonZeroIsNormal: false,
         outputFile: join(workspaceRoot, "reports", "mutation", "mutation.json"),
       };
+    case "dart_analyze":
+      return {
+        command: "dart",
+        args: ["analyze", "--format=json", "."],
+        timeoutMs: 120_000,
+        nonZeroIsNormal: true, // exits 3 when findings exist
+      };
   }
 }
 
@@ -101,21 +108,24 @@ function getScannerCommand(
  *
  * @param scanner       Which scanner to run.
  * @param workspaceRoot Absolute path to the project root (used as cwd).
+ * @param options       Optional overrides.
  * @returns             A {@link ScannerRunResult} with stdout or file output.
  */
 export function runScanner(
   scanner: KnownScanner,
   workspaceRoot: string,
+  options?: { workingDir?: string },
 ): Promise<ScannerRunResult> {
   const start = Date.now();
-  const cmd = getScannerCommand(scanner, workspaceRoot);
+  const cwd = options?.workingDir ?? workspaceRoot;
+  const cmd = getScannerCommand(scanner, cwd);
 
   return new Promise((resolve) => {
     execFile(
       cmd.command,
       cmd.args,
       {
-        cwd: workspaceRoot,
+        cwd,
         timeout: cmd.timeoutMs,
         maxBuffer: 50 * 1024 * 1024, // 50 MB — large codebases produce verbose output
         env: { ...process.env, FORCE_COLOR: "0" }, // suppress ANSI in output

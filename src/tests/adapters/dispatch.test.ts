@@ -94,7 +94,7 @@ describe("adaptScannerOutput", () => {
     assert.throws(() => adaptScannerOutput(scanner, {}));
   });
 
-  it("KNOWN_SCANNERS is frozen and contains exactly the four supported names", () => {
-    assert.deepEqual([...KNOWN_SCANNERS].sort(), ["bandit", "eslint", "semgrep", "stryker"]);
+  it("KNOWN_SCANNERS is frozen and contains all supported names", () => {
+    assert.deepEqual([...KNOWN_SCANNERS].sort(), ["bandit", "dart_analyze", "eslint", "semgrep", "stryker"]);
   });
 });

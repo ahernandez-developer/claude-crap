@@ -2977,7 +2977,7 @@ var require_compile = __commonJS({
       const schOrFunc = root.refs[ref];
       if (schOrFunc)
         return schOrFunc;
-      let _sch = resolve6.call(this, root, ref);
+      let _sch = resolve7.call(this, root, ref);
       if (_sch === void 0) {
         const schema = (_a = root.localRefs) === null || _a === void 0 ? void 0 : _a[ref];
         const { schemaId } = this.opts;
@@ -3004,7 +3004,7 @@ var require_compile = __commonJS({
     function sameSchemaEnv(s1, s2) {
       return s1.schema === s2.schema && s1.root === s2.root && s1.baseId === s2.baseId;
     }
-    function resolve6(root, ref) {
+    function resolve7(root, ref) {
       let sch;
       while (typeof (sch = this.refs[ref]) == "string")
         ref = sch;
@@ -3579,7 +3579,7 @@ var require_fast_uri = __commonJS({
       }
       return uri;
     }
-    function resolve6(baseURI, relativeURI, options) {
+    function resolve7(baseURI, relativeURI, options) {
       const schemelessOptions = options ? Object.assign({ scheme: "null" }, options) : { scheme: "null" };
       const resolved = resolveComponent(parse(baseURI, schemelessOptions), parse(relativeURI, schemelessOptions), schemelessOptions, true);
       schemelessOptions.skipEscape = true;
@@ -3806,7 +3806,7 @@ var require_fast_uri = __commonJS({
     var fastUri = {
       SCHEMES,
       normalize,
-      resolve: resolve6,
+      resolve: resolve7,
       resolveComponent,
       equal,
       serialize,
@@ -6853,6 +6853,84 @@ function buildSarifResult3(opts) {
   };
 }
 
+// src/adapters/dart-analyzer.ts
+function mapSeverity3(dartSeverity) {
+  switch (dartSeverity.toUpperCase()) {
+    case "ERROR":
+      return "error";
+    case "WARNING":
+      return "warning";
+    case "INFO":
+      return "note";
+    default:
+      return "warning";
+  }
+}
+var EFFORT_BY_SEVERITY = {
+  error: 30,
+  warning: 15,
+  note: 5,
+  none: 0
+};
+function adaptDartAnalyzer(rawOutput) {
+  let parsed;
+  if (typeof rawOutput === "string") {
+    try {
+      parsed = JSON.parse(rawOutput);
+    } catch {
+      throw new Error("[dart-analyzer adapter] rawOutput is not valid JSON");
+    }
+  } else if (rawOutput && typeof rawOutput === "object" && "diagnostics" in rawOutput) {
+    parsed = rawOutput;
+  } else {
+    throw new Error(
+      "[dart-analyzer adapter] rawOutput must be a JSON string or an object with a 'diagnostics' array"
+    );
+  }
+  if (!Array.isArray(parsed.diagnostics)) {
+    throw new Error("[dart-analyzer adapter] 'diagnostics' must be an array");
+  }
+  const results = [];
+  let totalEffortMinutes = 0;
+  for (const diag of parsed.diagnostics) {
+    const level = mapSeverity3(diag.severity);
+    const effort = EFFORT_BY_SEVERITY[level] ?? estimateEffortMinutes(level);
+    totalEffortMinutes += effort;
+    results.push({
+      ruleId: diag.code,
+      level,
+      message: {
+        text: diag.problemMessage + (diag.correctionMessage ? ` ${diag.correctionMessage}` : "")
+      },
+      locations: [
+        {
+          physicalLocation: {
+            artifactLocation: {
+              uri: diag.location.file
+            },
+            region: {
+              startLine: diag.location.range.start.line,
+              startColumn: diag.location.range.start.column,
+              endLine: diag.location.range.end.line,
+              endColumn: diag.location.range.end.column
+            }
+          }
+        }
+      ],
+      properties: {
+        effortMinutes: effort,
+        ...diag.documentation ? { helpUri: diag.documentation } : {}
+      }
+    });
+  }
+  return {
+    document: wrapResultsInSarif("dart_analyze", "1.0.0", results),
+    sourceTool: "dart_analyze",
+    findingCount: parsed.diagnostics.length,
+    totalEffortMinutes
+  };
+}
+
 // src/adapters/index.ts
 function adaptScannerOutput(scanner, rawOutput) {
   switch (scanner) {
@@ -6864,6 +6942,8 @@ function adaptScannerOutput(scanner, rawOutput) {
       return adaptBandit(rawOutput);
     case "stryker":
       return adaptStryker(rawOutput);
+    case "dart_analyze":
+      return adaptDartAnalyzer(rawOutput);
     default: {
       const exhaustive = scanner;
       throw new Error(`[adapters] Unknown scanner: ${String(exhaustive)}`);
@@ -8442,8 +8522,8 @@ import { existsSync as existsSync5 } from "node:fs";
 import { join as join11 } from "node:path";
 
 // src/scanner/detector.ts
-import { existsSync as existsSync2, readFileSync as readFileSync3 } from "node:fs";
-import { join as join7 } from "node:path";
+import { existsSync as existsSync2, readFileSync as readFileSync3, readdirSync } from "node:fs";
+import { join as join7, resolve as resolve6 } from "node:path";
 import { execFile } from "node:child_process";
 var SCANNER_SIGNALS = {
   eslint: {
@@ -8492,6 +8572,14 @@ var SCANNER_SIGNALS = {
     ],
     packageJsonKeys: ["@stryker-mutator/core"],
     binaryNames: ["stryker"]
+  },
+  dart_analyze: {
+    configFiles: [
+      "analysis_options.yaml",
+      "pubspec.yaml"
+    ],
+    packageJsonKeys: [],
+    binaryNames: ["dart"]
   }
 };
 function probeConfigFiles(workspaceRoot, scanner) {
@@ -8522,14 +8610,14 @@ function probePackageJson(workspaceRoot, scanner) {
   }
 }
 function probeBinary(binaryName) {
-  return new Promise((resolve6) => {
+  return new Promise((resolve7) => {
     execFile("which", [binaryName], { timeout: 5e3 }, (err) => {
-      resolve6(err === null);
+      resolve7(err === null);
     });
   });
 }
 async function detectScanners(workspaceRoot) {
-  const scanners = ["eslint", "semgrep", "bandit", "stryker"];
+  const scanners = ["eslint", "semgrep", "bandit", "stryker", "dart_analyze"];
   const results = await Promise.all(
     scanners.map(async (scanner) => {
       const configProbe = probeConfigFiles(workspaceRoot, scanner);
@@ -8542,10 +8630,13 @@ async function detectScanners(workspaceRoot) {
         };
       }
       if (probePackageJson(workspaceRoot, scanner)) {
+        const binName = SCANNER_SIGNALS[scanner].binaryNames[0];
+        const binPath = binName ? join7(workspaceRoot, "node_modules", ".bin", binName) : null;
+        const installed = binPath !== null && existsSync2(binPath);
         return {
           scanner,
-          available: true,
-          reason: `found in package.json dependencies`
+          available: installed,
+          reason: installed ? "found in package.json and installed" : `found in package.json but not installed (run \`npm install\`)`
         };
       }
       const signals = SCANNER_SIGNALS[scanner];
@@ -8566,6 +8657,58 @@ async function detectScanners(workspaceRoot) {
     })
   );
   return results;
+}
+var MONOREPO_DIRS = ["apps", "packages", "libs", "modules", "services"];
+async function detectMonorepoScanners(workspaceRoot) {
+  const subdirs = /* @__PURE__ */ new Set();
+  try {
+    const pkgPath = join7(workspaceRoot, "package.json");
+    const raw = readFileSync3(pkgPath, "utf-8");
+    const pkg = JSON.parse(raw);
+    if (Array.isArray(pkg.workspaces)) {
+      for (const ws of pkg.workspaces) {
+        if (typeof ws === "string" && !ws.includes("*")) {
+          const full = resolve6(workspaceRoot, ws);
+          if (existsSync2(full)) subdirs.add(full);
+        }
+      }
+    }
+  } catch {
+  }
+  for (const dir of MONOREPO_DIRS) {
+    const full = join7(workspaceRoot, dir);
+    try {
+      const entries = readdirSync(full, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.isDirectory() && !entry.name.startsWith(".")) {
+          subdirs.add(join7(full, entry.name));
+        }
+      }
+    } catch {
+    }
+  }
+  if (subdirs.size === 0) return [];
+  const detections = [];
+  const scanners = ["eslint", "semgrep", "bandit", "stryker", "dart_analyze"];
+  for (const subdir of subdirs) {
+    for (const scanner of scanners) {
+      const configProbe = probeConfigFiles(subdir, scanner);
+      if (!configProbe.found) continue;
+      if (scanner === "dart_analyze") {
+        const hasBinary = await probeBinary("dart");
+        if (!hasBinary) continue;
+      }
+      const relDir = subdir.replace(workspaceRoot + "/", "");
+      detections.push({
+        scanner,
+        available: true,
+        reason: `config file found in ${relDir}/`,
+        ...configProbe.path ? { configPath: configProbe.path } : {},
+        workingDir: subdir
+      });
+    }
+  }
+  return detections;
 }
 
 // src/scanner/runner.ts
@@ -8603,17 +8746,26 @@ function getScannerCommand(scanner, workspaceRoot) {
         nonZeroIsNormal: false,
         outputFile: join8(workspaceRoot, "reports", "mutation", "mutation.json")
       };
+    case "dart_analyze":
+      return {
+        command: "dart",
+        args: ["analyze", "--format=json", "."],
+        timeoutMs: 12e4,
+        nonZeroIsNormal: true
+        // exits 3 when findings exist
+      };
   }
 }
-function runScanner(scanner, workspaceRoot) {
+function runScanner(scanner, workspaceRoot, options) {
   const start = Date.now();
-  const cmd = getScannerCommand(scanner, workspaceRoot);
-  return new Promise((resolve6) => {
+  const cwd = options?.workingDir ?? workspaceRoot;
+  const cmd = getScannerCommand(scanner, cwd);
+  return new Promise((resolve7) => {
     execFile2(
       cmd.command,
       cmd.args,
       {
-        cwd: workspaceRoot,
+        cwd,
         timeout: cmd.timeoutMs,
         maxBuffer: 50 * 1024 * 1024,
         // 50 MB — large codebases produce verbose output
@@ -8627,7 +8779,7 @@ function runScanner(scanner, workspaceRoot) {
           if (cmd.outputFile && existsSync3(cmd.outputFile)) {
             try {
               const fileOutput = readFileSync4(cmd.outputFile, "utf-8");
-              resolve6({
+              resolve7({
                 scanner,
                 success: true,
                 rawOutput: fileOutput,
@@ -8637,7 +8789,7 @@ function runScanner(scanner, workspaceRoot) {
             } catch {
             }
           }
-          resolve6({
+          resolve7({
             scanner,
             success: false,
             rawOutput: "",
@@ -8650,7 +8802,7 @@ function runScanner(scanner, workspaceRoot) {
           if (existsSync3(cmd.outputFile)) {
             try {
               const fileOutput = readFileSync4(cmd.outputFile, "utf-8");
-              resolve6({
+              resolve7({
                 scanner,
                 success: true,
                 rawOutput: fileOutput,
@@ -8658,7 +8810,7 @@ function runScanner(scanner, workspaceRoot) {
               });
               return;
             } catch (readErr) {
-              resolve6({
+              resolve7({
                 scanner,
                 success: false,
                 rawOutput: "",
@@ -8668,7 +8820,7 @@ function runScanner(scanner, workspaceRoot) {
               return;
             }
           }
-          resolve6({
+          resolve7({
             scanner,
             success: false,
             rawOutput: "",
@@ -8679,7 +8831,7 @@ function runScanner(scanner, workspaceRoot) {
         }
         const output = stdout.trim();
         if (!output) {
-          resolve6({
+          resolve7({
             scanner,
             success: true,
             rawOutput: "[]",
@@ -8688,7 +8840,7 @@ function runScanner(scanner, workspaceRoot) {
           });
           return;
         }
-        resolve6({
+        resolve7({
           scanner,
           success: true,
           rawOutput: output,
@@ -8700,7 +8852,7 @@ function runScanner(scanner, workspaceRoot) {
 }
 
 // src/scanner/bootstrap.ts
-import { existsSync as existsSync4, writeFileSync as writeFileSync2, readdirSync } from "node:fs";
+import { existsSync as existsSync4, writeFileSync as writeFileSync2, readdirSync as readdirSync2 } from "node:fs";
 import { join as join9 } from "node:path";
 import { execFile as execFile3 } from "node:child_process";
 function detectProjectType(workspaceRoot) {
@@ -8717,12 +8869,13 @@ function detectProjectType(workspaceRoot) {
   }
   if (has("Directory.Build.props")) return "csharp";
   try {
-    const entries = readdirSync(workspaceRoot);
+    const entries = readdirSync2(workspaceRoot);
     if (entries.some((e) => e.endsWith(".csproj") || e.endsWith(".sln"))) {
       return "csharp";
     }
   } catch {
   }
+  if (has("pubspec.yaml")) return "dart";
   return "unknown";
 }
 function generateEslintConfig(isTypeScript) {
@@ -8764,7 +8917,7 @@ export default [
 `;
 }
 function npmInstall(workspaceRoot, packages) {
-  return new Promise((resolve6) => {
+  return new Promise((resolve7) => {
     execFile3(
       "npm",
       ["install", "--save-dev", ...packages],
@@ -8775,14 +8928,14 @@ function npmInstall(workspaceRoot, packages) {
       },
       (err, stdout, stderr) => {
         if (err) {
-          resolve6({
+          resolve7({
             action: `npm install --save-dev ${packages.join(" ")}`,
             success: false,
             detail: stderr || err.message
           });
           return;
         }
-        resolve6({
+        resolve7({
           action: `npm install --save-dev ${packages.join(" ")}`,
           success: true,
           detail: `installed ${packages.join(", ")}`
@@ -8836,6 +8989,12 @@ function getRecommendation(projectType) {
         scanner: "semgrep",
         canAutoInstall: false,
         installInstructions: "brew install semgrep  (or: pip install semgrep, pipx install semgrep)"
+      };
+    case "dart":
+      return {
+        scanner: "dart_analyze",
+        canAutoInstall: false,
+        installInstructions: "Install the Dart SDK: https://dart.dev/get-dart  (or Flutter SDK which includes Dart)"
       };
     case "unknown":
       return {
@@ -9111,10 +9270,18 @@ function ingestScannerRun(scanner, rawOutput, sarifStore) {
 async function autoScan(workspaceRoot, sarifStore, logger2, options) {
   const start = Date.now();
   const detected = await detectScanners(workspaceRoot);
+  const monorepoDetected = await detectMonorepoScanners(workspaceRoot);
+  const rootScannerSet = new Set(detected.filter((d) => d.available).map((d) => d.scanner));
+  for (const md of monorepoDetected) {
+    if (!rootScannerSet.has(md.scanner)) {
+      detected.push(md);
+    }
+  }
   const available = detected.filter((d) => d.available);
   logger2.info(
     {
       detected: detected.map((d) => `${d.scanner}:${d.available}`),
+      monorepo: monorepoDetected.length,
       available: available.length
     },
     "auto-scan: detection complete"
@@ -9169,7 +9336,7 @@ async function autoScan(workspaceRoot, sarifStore, logger2, options) {
     };
   }
   const runResults = await Promise.allSettled(
-    available.map((d) => runScanner(d.scanner, workspaceRoot))
+    available.map((d) => runScanner(d.scanner, workspaceRoot, d.workingDir ? { workingDir: d.workingDir } : void 0))
   );
   const results = [];
   let totalFindings = 0;
@@ -9386,7 +9553,7 @@ var ingestScannerOutputSchema = {
   properties: {
     scanner: {
       type: "string",
-      enum: ["semgrep", "eslint", "bandit", "stryker"],
+      enum: ["semgrep", "eslint", "bandit", "stryker", "dart_analyze"],
       description: "Identifier of the producing scanner."
     },
     rawOutput: {

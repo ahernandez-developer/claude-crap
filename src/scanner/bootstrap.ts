@@ -44,6 +44,7 @@ export type ProjectType =
   | "python"
   | "java"
   | "csharp"
+  | "dart"
   | "unknown";
 
 /**
@@ -116,6 +117,9 @@ export function detectProjectType(workspaceRoot: string): ProjectType {
   } catch {
     // readdirSync can fail on permissions — fall through
   }
+
+  // Dart / Flutter detection
+  if (has("pubspec.yaml")) return "dart";
 
   return "unknown";
 }
@@ -272,6 +276,13 @@ function getRecommendation(projectType: ProjectType): ScannerRecommendation {
         canAutoInstall: false,
         installInstructions:
           "brew install semgrep  (or: pip install semgrep, pipx install semgrep)",
+      };
+    case "dart":
+      return {
+        scanner: "dart_analyze",
+        canAutoInstall: false,
+        installInstructions:
+          "Install the Dart SDK: https://dart.dev/get-dart  (or Flutter SDK which includes Dart)",
       };
     case "unknown":
       return {

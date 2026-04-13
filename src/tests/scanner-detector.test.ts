@@ -90,24 +90,33 @@ describe("detectScanners", () => {
     }
   });
 
-  it("detects eslint from package.json devDependencies", async () => {
+  it("detects eslint from package.json — not installed vs installed", async () => {
     const dir = makeTmpDir();
     try {
       writeFileSync(
         join(dir, "package.json"),
         JSON.stringify({ devDependencies: { eslint: "^9.0.0" } }),
       );
+      // Without node_modules/.bin/eslint → declared but not installed
       const results = await detectScanners(dir);
       const eslint = results.find((r) => r.scanner === "eslint");
       assert.ok(eslint);
-      assert.equal(eslint.available, true);
-      assert.ok(eslint.reason.includes("package.json"));
+      assert.equal(eslint.available, false);
+      assert.ok(eslint.reason.includes("not installed"));
+
+      // With binary present → installed
+      mkdirSync(join(dir, "node_modules", ".bin"), { recursive: true });
+      writeFileSync(join(dir, "node_modules", ".bin", "eslint"), "");
+      const results2 = await detectScanners(dir);
+      const eslint2 = results2.find((r) => r.scanner === "eslint");
+      assert.ok(eslint2);
+      assert.equal(eslint2.available, true);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   });
 
-  it("detects stryker from package.json @stryker-mutator/core", async () => {
+  it("detects stryker from package.json — not installed vs installed", async () => {
     const dir = makeTmpDir();
     try {
       writeFileSync(
@@ -116,11 +125,20 @@ describe("detectScanners", () => {
           devDependencies: { "@stryker-mutator/core": "^7.0.0" },
         }),
       );
+      // Without binary → not installed
       const results = await detectScanners(dir);
       const stryker = results.find((r) => r.scanner === "stryker");
       assert.ok(stryker);
-      assert.equal(stryker.available, true);
-      assert.ok(stryker.reason.includes("package.json"));
+      assert.equal(stryker.available, false);
+      assert.ok(stryker.reason.includes("not installed"));
+
+      // With binary → installed
+      mkdirSync(join(dir, "node_modules", ".bin"), { recursive: true });
+      writeFileSync(join(dir, "node_modules", ".bin", "stryker"), "");
+      const results2 = await detectScanners(dir);
+      const stryker2 = results2.find((r) => r.scanner === "stryker");
+      assert.ok(stryker2);
+      assert.equal(stryker2.available, true);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -133,9 +151,9 @@ describe("detectScanners", () => {
       // Config and package.json probes will all fail.
       // Binary probe results depend on the host — don't assert on those,
       // but do assert the structure is correct.
-      assert.equal(results.length, 4);
+      assert.equal(results.length, 5);
       for (const r of results) {
-        assert.ok(["eslint", "semgrep", "bandit", "stryker"].includes(r.scanner));
+        assert.ok(["eslint", "semgrep", "bandit", "stryker", "dart_analyze"].includes(r.scanner));
         assert.equal(typeof r.available, "boolean");
         assert.equal(typeof r.reason, "string");
       }
@@ -150,7 +168,7 @@ describe("detectScanners", () => {
       writeFileSync(join(dir, "package.json"), "not json at all");
       // Should not throw — just skip the package.json probe
       const results = await detectScanners(dir);
-      assert.equal(results.length, 4);
+      assert.equal(results.length, 5);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -172,10 +190,10 @@ describe("detectScanners", () => {
     }
   });
 
-  it("SCANNER_SIGNALS covers all four scanners", () => {
+  it("SCANNER_SIGNALS covers all supported scanners", () => {
     assert.deepEqual(
       Object.keys(SCANNER_SIGNALS).sort(),
-      ["bandit", "eslint", "semgrep", "stryker"],
+      ["bandit", "dart_analyze", "eslint", "semgrep", "stryker"],
     );
   });
 });
