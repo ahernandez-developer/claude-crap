@@ -55,9 +55,34 @@ const PLUGIN_ROOT = resolve(__dirname, "..");
  * is a cryptic ERR_MODULE_NOT_FOUND — vs. a ~5s npm install on first
  * run. Speed wins.
  */
+/**
+ * Critical packages that are externalized by esbuild and MUST exist
+ * in node_modules at runtime. If any are missing, npm install runs
+ * even when node_modules/ exists (handles dep additions across versions).
+ */
+const REQUIRED_PACKAGES = [
+  "@modelcontextprotocol/sdk",
+  "fastify",
+  "@fastify/static",
+  "pino",
+  "web-tree-sitter",
+  "tree-sitter-wasms",
+  "picomatch",
+];
+
 function ensureDependencies() {
   const nodeModulesPath = join(PLUGIN_ROOT, "node_modules");
-  if (existsSync(nodeModulesPath)) return; // fast path — already installed
+
+  // Fast path: node_modules exists AND all required packages are present.
+  if (existsSync(nodeModulesPath)) {
+    const missing = REQUIRED_PACKAGES.filter(
+      (pkg) => !existsSync(join(nodeModulesPath, pkg)),
+    );
+    if (missing.length === 0) return; // all good
+    process.stderr.write(
+      `[claude-crap] node_modules/ exists but missing: ${missing.join(", ")}\n`,
+    );
+  }
 
   // ── Report what we're about to install ────────────────────────────
   let depsSummary = "(unable to read package.json)";
