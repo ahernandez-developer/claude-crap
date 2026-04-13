@@ -9805,6 +9805,19 @@ async function main() {
         "monorepo project map discovered"
       );
       await persistProjectMap(projectMap, config.pluginRoot);
+      const needsEslint = projectMap.projects.some(
+        (p) => (p.type === "typescript" || p.type === "javascript") && !p.scannerAvailable
+      );
+      if (needsEslint) {
+        logger.info("monorepo: JS/TS projects detected but ESLint not installed \u2014 bootstrapping");
+        try {
+          await bootstrapScanner(config.pluginRoot, sarifStore, logger);
+          projectMap = await discoverProjectMap(config.pluginRoot);
+          await persistProjectMap(projectMap, config.pluginRoot);
+        } catch (err) {
+          logger.warn({ err: err.message }, "monorepo ESLint bootstrap failed");
+        }
+      }
     }
   } catch (err) {
     logger.warn({ err: err.message }, "project map discovery failed");
