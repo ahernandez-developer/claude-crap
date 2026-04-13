@@ -134,7 +134,23 @@ export const scoreProjectSchema = {
       description:
         "Output format. `markdown` returns only the chat summary, `json` returns only the structured snapshot, `both` (default) returns both as separate content blocks.",
     },
+    scope: {
+      type: "string",
+      description: "Optional project name from the project map. When provided, the score is computed only for files within that project's subtree. Omit to score the entire workspace.",
+    },
   },
+  required: [],
+  additionalProperties: false,
+} as const;
+
+/**
+ * Schema for the `list_projects` tool. Returns the discovered sub-projects
+ * in the workspace, or an empty list for single-project workspaces.
+ */
+export const listProjectsSchema = {
+  type: "object",
+  description: "List all discovered sub-projects in the workspace. In a monorepo, returns each sub-project with its type, path, and recommended scanner. In a single-project workspace, returns an empty list.",
+  properties: {},
   required: [],
   additionalProperties: false,
 } as const;

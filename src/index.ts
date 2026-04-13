@@ -59,6 +59,7 @@ import { findTestFile } from "./tools/test-harness.js";
 import { resolveWithinWorkspace } from "./workspace-guard.js";
 import { autoScan } from "./scanner/auto-scan.js";
 import { bootstrapScanner } from "./scanner/bootstrap.js";
+import { discoverProjectMap, persistProjectMap, type ProjectMap } from "./monorepo/project-map.js";
 import {
   autoScanSchema,
   bootstrapScannerSchema,
@@ -67,6 +68,7 @@ import {
   analyzeFileAstSchema,
   ingestSarifSchema,
   ingestScannerOutputSchema,
+  listProjectsSchema,
   requireTestHarnessSchema,
   scoreProjectSchema,
 } from "./schemas/tool-schemas.js";
@@ -116,6 +118,21 @@ async function main(): Promise<void> {
     { findings: sarifStore.size(), path: sarifStore.consolidatedReportPath },
     "SARIF store ready",
   );
+
+  // Discover monorepo project map (non-fatal).
+  let projectMap: ProjectMap | null = null;
+  try {
+    projectMap = await discoverProjectMap(config.pluginRoot);
+    if (projectMap.isMonorepo) {
+      logger.info(
+        { projects: projectMap.projects.map((p) => `${p.name}(${p.type})`), count: projectMap.projects.length },
+        "monorepo project map discovered",
+      );
+      await persistProjectMap(projectMap, config.pluginRoot);
+    }
+  } catch (err) {
+    logger.warn({ err: (err as Error).message }, "project map discovery failed");
+  }
 
   // Try to start the local Vue.js dashboard. Failures here are
   // intentionally non-fatal — the MCP server still works without it.
@@ -235,6 +252,11 @@ async function main(): Promise<void> {
           "Detect project type, install the right scanner (ESLint for JS/TS, Bandit for Python, Semgrep for Java/C#), create minimal config, and run auto_scan to verify.",
         inputSchema: bootstrapScannerSchema,
       },
+      {
+        name: "list_projects",
+        description: "List all discovered sub-projects in the workspace. In a monorepo, returns each sub-project with its type, path, and recommended scanner.",
+        inputSchema: listProjectsSchema,
+      },
     ],
   }));
 
@@ -343,12 +365,21 @@ async function main(): Promise<void> {
       }
 
       case "score_project": {
-        const typed = (args ?? {}) as { format?: "markdown" | "json" | "both" };
+        const typed = (args ?? {}) as { format?: "markdown" | "json" | "both"; scope?: string };
         const format = typed.format ?? "both";
+        // Resolve scope to a workspace subdirectory
+        let scoreRoot = config.pluginRoot;
+        if (typed.scope && projectMap) {
+          const project = projectMap.projects.find((p) => p.name === typed.scope);
+          if (project) {
+            const { join } = await import("node:path");
+            scoreRoot = join(config.pluginRoot, project.path);
+          }
+        }
         try {
-          const workspace = await estimateWorkspaceLoc(config.pluginRoot, { exclude: userExclusions });
+          const workspace = await estimateWorkspaceLoc(scoreRoot, { exclude: userExclusions });
           const score: ProjectScore = computeProjectScore({
-            workspaceRoot: config.pluginRoot,
+            workspaceRoot: scoreRoot,
             minutesPerLoc: config.minutesPerLoc,
             tdrMaxRating: config.tdrMaxRating,
             workspace: { physicalLoc: workspace.physicalLoc, fileCount: workspace.fileCount },
@@ -623,6 +654,25 @@ async function main(): Promise<void> {
             isError: true,
           };
         }
+      }
+
+      case "list_projects": {
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  tool: "list_projects",
+                  isMonorepo: projectMap?.isMonorepo ?? false,
+                  projects: projectMap?.projects ?? [],
+                },
+                null,
+                2,
+              ),
+            },
+          ],
+        };
       }
 
       default:
