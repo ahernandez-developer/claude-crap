@@ -298,419 +298,203 @@ async function main(): Promise<void> {
     return handleToolCall(name, args);
   });
 
+  // ── Per-tool handlers ──────────────────────────────────────────
+  // Extracted from the switch to keep handleToolCall under the
+  // cyclomatic complexity threshold.
+
+  type ToolResult = { content: Array<{ type: string; text: string }>; isError?: boolean };
+
+  function handleComputeCrap(args: Record<string, unknown>): ToolResult {
+    const typed = args as {
+      cyclomaticComplexity: number;
+      coveragePercent: number;
+      functionName: string;
+      filePath: string;
+    };
+    const result = computeCrap(
+      { cyclomaticComplexity: typed.cyclomaticComplexity, coveragePercent: typed.coveragePercent },
+      config.crapThreshold,
+    );
+    return {
+      content: [{ type: "text", text: JSON.stringify(
+        { tool: "compute_crap", function: typed.functionName, file: typed.filePath, ...result }, null, 2,
+      ) }],
+      isError: result.exceedsThreshold,
+    };
+  }
+
+  function handleComputeTdr(args: Record<string, unknown>): ToolResult {
+    const typed = args as {
+      remediationMinutes: number;
+      totalLinesOfCode: number;
+      scope: "project" | "module" | "file";
+    };
+    const result = computeTdr({
+      remediationMinutes: typed.remediationMinutes,
+      totalLinesOfCode: typed.totalLinesOfCode,
+      minutesPerLoc: config.minutesPerLoc,
+    });
+    return {
+      content: [{ type: "text", text: JSON.stringify({ tool: "compute_tdr", scope: typed.scope, ...result }, null, 2) }],
+    };
+  }
+
+  async function handleAnalyzeFileAst(args: Record<string, unknown>): Promise<ToolResult> {
+    const typed = args as { filePath: string; language: SupportedLanguage };
+    const absolutePath = resolveWithinWorkspace(config.pluginRoot, typed.filePath);
+    try {
+      const metrics = await astEngine.analyzeFile({ filePath: absolutePath, language: typed.language });
+      return { content: [{ type: "text", text: JSON.stringify({ tool: "analyze_file_ast", ...metrics }, null, 2) }] };
+    } catch (err) {
+      logger.error({ err, filePath: absolutePath, language: typed.language }, "analyze_file_ast failed");
+      return {
+        content: [{ type: "text", text: JSON.stringify(
+          { tool: "analyze_file_ast", status: "error", message: (err as Error).message, filePath: typed.filePath, language: typed.language }, null, 2,
+        ) }],
+        isError: true,
+      };
+    }
+  }
+
   /** Dispatch a tool call to the correct handler. */
   async function handleToolCall(
     name: string,
     args: Record<string, unknown> | undefined,
-  ): Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }> {
+  ): Promise<ToolResult> {
     switch (name) {
-      case "compute_crap": {
-        const typed = args as {
-          cyclomaticComplexity: number;
-          coveragePercent: number;
-          functionName: string;
-          filePath: string;
-        };
-        const result = computeCrap(
-          { cyclomaticComplexity: typed.cyclomaticComplexity, coveragePercent: typed.coveragePercent },
-          config.crapThreshold,
-        );
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(
-                { tool: "compute_crap", function: typed.functionName, file: typed.filePath, ...result },
-                null,
-                2,
-              ),
-            },
-          ],
-          // Setting isError=true tells the LLM this call should be treated
-          // as a failure, which pushes it toward corrective action rather
-          // than assuming the score was acceptable.
-          isError: result.exceedsThreshold,
-        };
-      }
+      case "compute_crap":
+        return handleComputeCrap(args ?? {});
+      case "compute_tdr":
+        return handleComputeTdr(args ?? {});
+      case "analyze_file_ast":
+        return handleAnalyzeFileAst(args ?? {});
 
-      case "compute_tdr": {
-        const typed = args as {
-          remediationMinutes: number;
-          totalLinesOfCode: number;
-          scope: "project" | "module" | "file";
-        };
-        const result = computeTdr({
-          remediationMinutes: typed.remediationMinutes,
-          totalLinesOfCode: typed.totalLinesOfCode,
-          minutesPerLoc: config.minutesPerLoc,
-        });
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify({ tool: "compute_tdr", scope: typed.scope, ...result }, null, 2),
-            },
-          ],
-        };
-      }
-
-      case "analyze_file_ast": {
-        const typed = args as { filePath: string; language: SupportedLanguage };
-        const absolutePath = resolveWithinWorkspace(config.pluginRoot, typed.filePath);
-        try {
-          const metrics = await astEngine.analyzeFile({
-            filePath: absolutePath,
-            language: typed.language,
-          });
-          return {
-            content: [
-              {
-                type: "text",
-                text: JSON.stringify({ tool: "analyze_file_ast", ...metrics }, null, 2),
-              },
-            ],
-          };
-        } catch (err) {
-          logger.error(
-            { err, filePath: absolutePath, language: typed.language },
-            "analyze_file_ast failed",
-          );
-          return {
-            content: [
-              {
-                type: "text",
-                text: JSON.stringify(
-                  {
-                    tool: "analyze_file_ast",
-                    status: "error",
-                    message: (err as Error).message,
-                    filePath: typed.filePath,
-                    language: typed.language,
-                  },
-                  null,
-                  2,
-                ),
-              },
-            ],
-            isError: true,
-          };
-        }
-      }
-
-      case "score_project": {
-        const typed = (args ?? {}) as { format?: "markdown" | "json" | "both"; scope?: string };
-        const format = typed.format ?? "both";
-        // Resolve scope to a workspace subdirectory
-        let scoreRoot = config.pluginRoot;
-        if (typed.scope && projectMap) {
-          const project = projectMap.projects.find((p) => p.name === typed.scope);
-          if (project) {
-            const { join } = await import("node:path");
-            scoreRoot = join(config.pluginRoot, project.path);
-          }
-        }
-        try {
-          const workspace = await estimateWorkspaceLoc(scoreRoot, { exclude: userExclusions });
-          const score: ProjectScore = computeProjectScore({
-            workspaceRoot: scoreRoot,
-            minutesPerLoc: config.minutesPerLoc,
-            tdrMaxRating: config.tdrMaxRating,
-            workspace: { physicalLoc: workspace.physicalLoc, fileCount: workspace.fileCount },
-            sarifStore,
-            dashboardUrl: dashboard?.url ?? null,
-            sarifReportPath: sarifStore.consolidatedReportPath,
-          });
-
-          const blocks: Array<{ type: "text"; text: string }> = [];
-          if (format === "markdown" || format === "both") {
-            blocks.push({ type: "text", text: renderProjectScoreMarkdown(score) });
-          }
-          if (format === "json" || format === "both") {
-            blocks.push({ type: "text", text: JSON.stringify(score, null, 2) });
-          }
-
-          // Respect the workspace strictness setting: only `strict`
-          // mode should flag a failing project as an MCP tool error
-          // and push the agent toward remediation. In `warn` and
-          // `advisory` modes the Stop hook lets the task close, so
-          // `score_project` must stay consistent and return the
-          // score as plain content.
-          const strictness = safeLoadStrictness(config.pluginRoot, logger);
-          const shouldFlagError = strictness === "strict" && !score.overall.passes;
-
-          return {
-            content: blocks,
-            isError: shouldFlagError,
-          };
-        } catch (err) {
-          logger.error({ err }, "score_project failed");
-          return {
-            content: [
-              {
-                type: "text",
-                text: JSON.stringify(
-                  { tool: "score_project", status: "error", message: (err as Error).message },
-                  null,
-                  2,
-                ),
-              },
-            ],
-            isError: true,
-          };
-        }
-      }
-
-      case "require_test_harness": {
-        const typed = args as { filePath: string };
-        const absolutePath = resolveWithinWorkspace(config.pluginRoot, typed.filePath);
-        try {
-          const resolution = await findTestFile(config.pluginRoot, absolutePath);
-          const hasTest = resolution.testFile !== null;
-          return {
-            content: [
-              {
-                type: "text",
-                text: JSON.stringify(
-                  {
-                    tool: "require_test_harness",
-                    filePath: typed.filePath,
-                    hasTest,
-                    isTestFile: resolution.isTestFile,
-                    testFile: resolution.testFile,
-                    candidates: resolution.candidates,
-                    ...(hasTest
-                      ? {}
-                      : {
-                          corrective:
-                            "No test file found. Per the CLAUDE.md Golden Rule, create a characterization " +
-                            "test at one of the candidate paths before writing any functional code for this file.",
-                        }),
-                  },
-                  null,
-                  2,
-                ),
-              },
-            ],
-            // The Golden Rule says "no code without a test", so the absence
-            // of a test is a blocking condition. Surface it as an error.
-            isError: !hasTest,
-          };
-        } catch (err) {
-          logger.error({ err, filePath: absolutePath }, "require_test_harness failed");
-          return {
-            content: [
-              {
-                type: "text",
-                text: JSON.stringify(
-                  {
-                    tool: "require_test_harness",
-                    status: "error",
-                    message: (err as Error).message,
-                    filePath: typed.filePath,
-                  },
-                  null,
-                  2,
-                ),
-              },
-            ],
-            isError: true,
-          };
-        }
-      }
-
-      case "ingest_scanner_output": {
-        const typed = args as { scanner: KnownScanner; rawOutput: unknown };
-        try {
-          const adapted = adaptScannerOutput(typed.scanner, typed.rawOutput);
-          // F-A05-01: validate the adapter's output against the same
-          // schema used by `ingest_sarif`. Adapters are internal and
-          // should already emit conformant documents, but this catches
-          // regressions before they reach the store or the dashboard.
-          validateSarifDocument(adapted.document);
-          const stats = sarifStore.ingestRun(adapted.document, adapted.sourceTool);
-          await sarifStore.persist();
-          return {
-            content: [
-              {
-                type: "text",
-                text: JSON.stringify(
-                  {
-                    tool: "ingest_scanner_output",
-                    status: "accepted",
-                    scanner: typed.scanner,
-                    findingsParsed: adapted.findingCount,
-                    totalEffortMinutes: adapted.totalEffortMinutes,
-                    accepted: stats.accepted,
-                    duplicates: stats.duplicates,
-                    total: stats.total,
-                    storeSize: sarifStore.size(),
-                    reportPath: sarifStore.consolidatedReportPath,
-                  },
-                  null,
-                  2,
-                ),
-              },
-            ],
-          };
-        } catch (err) {
-          logger.error({ err, scanner: typed.scanner }, "ingest_scanner_output failed");
-          return {
-            content: [
-              {
-                type: "text",
-                text: JSON.stringify(
-                  {
-                    tool: "ingest_scanner_output",
-                    status: "error",
-                    scanner: typed.scanner,
-                    message: (err as Error).message,
-                  },
-                  null,
-                  2,
-                ),
-              },
-            ],
-            isError: true,
-          };
-        }
-      }
-
-      case "ingest_sarif": {
-        const typed = args as { sarifDocument: PersistedSarif; sourceTool: string };
-        try {
-          // F-A05-01: validate the caller-supplied document against a
-          // minimal SARIF 2.1.0 schema BEFORE touching the store. The
-          // MCP SDK already validated the outer tool-call shape, but
-          // the inner `sarifDocument` is declared as `type: "object"`
-          // in tool-schemas.ts and would otherwise flow through
-          // un-checked.
-          validateSarifDocument(typed.sarifDocument);
-          const stats = sarifStore.ingestRun(typed.sarifDocument, typed.sourceTool);
-          await sarifStore.persist();
-          return {
-            content: [
-              {
-                type: "text",
-                text: JSON.stringify(
-                  {
-                    tool: "ingest_sarif",
-                    status: "accepted",
-                    sourceTool: typed.sourceTool,
-                    accepted: stats.accepted,
-                    duplicates: stats.duplicates,
-                    total: stats.total,
-                    storeSize: sarifStore.size(),
-                    reportPath: sarifStore.consolidatedReportPath,
-                  },
-                  null,
-                  2,
-                ),
-              },
-            ],
-          };
-        } catch (err) {
-          logger.error({ err, sourceTool: typed.sourceTool }, "ingest_sarif failed");
-          return {
-            content: [
-              {
-                type: "text",
-                text: JSON.stringify(
-                  { tool: "ingest_sarif", status: "error", message: (err as Error).message },
-                  null,
-                  2,
-                ),
-              },
-            ],
-            isError: true,
-          };
-        }
-      }
-
-      case "bootstrap_scanner": {
-        logger.info({ tool: "bootstrap_scanner" }, "Tool call received");
-        try {
-          const result = await bootstrapScanner(config.pluginRoot, sarifStore, logger);
-          const markdown = renderBootstrapMarkdown(result);
-          return {
-            content: [
-              { type: "text", text: markdown },
-              { type: "text", text: JSON.stringify(result, null, 2) },
-            ],
-            isError: !result.success,
-          };
-        } catch (err) {
-          logger.error({ err }, "bootstrap_scanner failed");
-          return {
-            content: [
-              {
-                type: "text",
-                text: JSON.stringify(
-                  { tool: "bootstrap_scanner", status: "error", message: (err as Error).message },
-                  null,
-                  2,
-                ),
-              },
-            ],
-            isError: true,
-          };
-        }
-      }
-
-      case "auto_scan": {
-        logger.info({ tool: "auto_scan" }, "Tool call received");
-        try {
-          const result = await autoScan(config.pluginRoot, sarifStore, logger, {
-            engine: astEngine,
-            cyclomaticMax: config.cyclomaticMax,
-            exclude: userExclusions,
-          });
-          const markdown = renderAutoScanMarkdown(result);
-          return {
-            content: [
-              { type: "text", text: markdown },
-              { type: "text", text: JSON.stringify(result, null, 2) },
-            ],
-          };
-        } catch (err) {
-          logger.error({ err }, "auto_scan failed");
-          return {
-            content: [
-              {
-                type: "text",
-                text: JSON.stringify(
-                  { tool: "auto_scan", status: "error", message: (err as Error).message },
-                  null,
-                  2,
-                ),
-              },
-            ],
-            isError: true,
-          };
-        }
-      }
-
-      case "list_projects": {
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(
-                {
-                  tool: "list_projects",
-                  isMonorepo: projectMap?.isMonorepo ?? false,
-                  projects: projectMap?.projects ?? [],
-                },
-                null,
-                2,
-              ),
-            },
-          ],
-        };
-      }
-
+      case "score_project":
+        return handleScoreProject(args ?? {});
+      case "require_test_harness":
+        return handleRequireTestHarness(args ?? {});
+      case "ingest_scanner_output":
+        return handleIngestScannerOutput(args ?? {});
+      case "ingest_sarif":
+        return handleIngestSarif(args ?? {});
+      case "bootstrap_scanner":
+        return handleBootstrapScanner();
+      case "auto_scan":
+        return handleAutoScan();
+      case "list_projects":
+        return handleListProjects();
       default:
         throw new Error(`[claude-crap] Unknown tool: ${name}`);
     }
+  }
+
+  async function handleScoreProject(args: Record<string, unknown>): Promise<ToolResult> {
+    const typed = args as { format?: "markdown" | "json" | "both"; scope?: string };
+    const format = typed.format ?? "both";
+    let scoreRoot = config.pluginRoot;
+    if (typed.scope && projectMap) {
+      const project = projectMap.projects.find((p) => p.name === typed.scope);
+      if (project) {
+        const { join } = await import("node:path");
+        scoreRoot = join(config.pluginRoot, project.path);
+      }
+    }
+    try {
+      const workspace = await estimateWorkspaceLoc(scoreRoot, { exclude: userExclusions });
+      const score: ProjectScore = computeProjectScore({
+        workspaceRoot: scoreRoot, minutesPerLoc: config.minutesPerLoc, tdrMaxRating: config.tdrMaxRating,
+        workspace: { physicalLoc: workspace.physicalLoc, fileCount: workspace.fileCount },
+        sarifStore, dashboardUrl: dashboard?.url ?? null, sarifReportPath: sarifStore.consolidatedReportPath,
+      });
+      const blocks: Array<{ type: "text"; text: string }> = [];
+      if (format === "markdown" || format === "both") blocks.push({ type: "text", text: renderProjectScoreMarkdown(score) });
+      if (format === "json" || format === "both") blocks.push({ type: "text", text: JSON.stringify(score, null, 2) });
+      const strictness = safeLoadStrictness(config.pluginRoot, logger);
+      return { content: blocks, isError: strictness === "strict" && !score.overall.passes };
+    } catch (err) {
+      logger.error({ err }, "score_project failed");
+      return { content: [{ type: "text", text: JSON.stringify({ tool: "score_project", status: "error", message: (err as Error).message }, null, 2) }], isError: true };
+    }
+  }
+
+  async function handleRequireTestHarness(args: Record<string, unknown>): Promise<ToolResult> {
+    const typed = args as { filePath: string };
+    const absolutePath = resolveWithinWorkspace(config.pluginRoot, typed.filePath);
+    try {
+      const resolution = await findTestFile(config.pluginRoot, absolutePath);
+      const hasTest = resolution.testFile !== null;
+      return {
+        content: [{ type: "text", text: JSON.stringify({
+          tool: "require_test_harness", filePath: typed.filePath, hasTest, isTestFile: resolution.isTestFile,
+          testFile: resolution.testFile, candidates: resolution.candidates,
+          ...(hasTest ? {} : { corrective: "No test file found. Per the CLAUDE.md Golden Rule, create a characterization test at one of the candidate paths before writing any functional code for this file." }),
+        }, null, 2) }],
+        isError: !hasTest,
+      };
+    } catch (err) {
+      logger.error({ err, filePath: absolutePath }, "require_test_harness failed");
+      return { content: [{ type: "text", text: JSON.stringify({ tool: "require_test_harness", status: "error", message: (err as Error).message, filePath: typed.filePath }, null, 2) }], isError: true };
+    }
+  }
+
+  async function handleIngestScannerOutput(args: Record<string, unknown>): Promise<ToolResult> {
+    const typed = args as { scanner: KnownScanner; rawOutput: unknown };
+    try {
+      const adapted = adaptScannerOutput(typed.scanner, typed.rawOutput);
+      validateSarifDocument(adapted.document);
+      const stats = sarifStore.ingestRun(adapted.document, adapted.sourceTool);
+      await sarifStore.persist();
+      return { content: [{ type: "text", text: JSON.stringify({
+        tool: "ingest_scanner_output", status: "accepted", scanner: typed.scanner,
+        findingsParsed: adapted.findingCount, totalEffortMinutes: adapted.totalEffortMinutes,
+        accepted: stats.accepted, duplicates: stats.duplicates, total: stats.total,
+        storeSize: sarifStore.size(), reportPath: sarifStore.consolidatedReportPath,
+      }, null, 2) }] };
+    } catch (err) {
+      logger.error({ err, scanner: typed.scanner }, "ingest_scanner_output failed");
+      return { content: [{ type: "text", text: JSON.stringify({ tool: "ingest_scanner_output", status: "error", scanner: typed.scanner, message: (err as Error).message }, null, 2) }], isError: true };
+    }
+  }
+
+  async function handleIngestSarif(args: Record<string, unknown>): Promise<ToolResult> {
+    const typed = args as { sarifDocument: PersistedSarif; sourceTool: string };
+    try {
+      validateSarifDocument(typed.sarifDocument);
+      const stats = sarifStore.ingestRun(typed.sarifDocument, typed.sourceTool);
+      await sarifStore.persist();
+      return { content: [{ type: "text", text: JSON.stringify({
+        tool: "ingest_sarif", status: "accepted", sourceTool: typed.sourceTool,
+        accepted: stats.accepted, duplicates: stats.duplicates, total: stats.total,
+        storeSize: sarifStore.size(), reportPath: sarifStore.consolidatedReportPath,
+      }, null, 2) }] };
+    } catch (err) {
+      logger.error({ err, sourceTool: typed.sourceTool }, "ingest_sarif failed");
+      return { content: [{ type: "text", text: JSON.stringify({ tool: "ingest_sarif", status: "error", message: (err as Error).message }, null, 2) }], isError: true };
+    }
+  }
+
+  async function handleBootstrapScanner(): Promise<ToolResult> {
+    try {
+      const result = await bootstrapScanner(config.pluginRoot, sarifStore, logger);
+      return { content: [{ type: "text", text: renderBootstrapMarkdown(result) }, { type: "text", text: JSON.stringify(result, null, 2) }], isError: !result.success };
+    } catch (err) {
+      logger.error({ err }, "bootstrap_scanner failed");
+      return { content: [{ type: "text", text: JSON.stringify({ tool: "bootstrap_scanner", status: "error", message: (err as Error).message }, null, 2) }], isError: true };
+    }
+  }
+
+  async function handleAutoScan(): Promise<ToolResult> {
+    try {
+      const result = await autoScan(config.pluginRoot, sarifStore, logger, { engine: astEngine, cyclomaticMax: config.cyclomaticMax, exclude: userExclusions });
+      return { content: [{ type: "text", text: renderAutoScanMarkdown(result) }, { type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      logger.error({ err }, "auto_scan failed");
+      return { content: [{ type: "text", text: JSON.stringify({ tool: "auto_scan", status: "error", message: (err as Error).message }, null, 2) }], isError: true };
+    }
+  }
+
+  function handleListProjects(): ToolResult {
+    return { content: [{ type: "text", text: JSON.stringify({ tool: "list_projects", isMonorepo: projectMap?.isMonorepo ?? false, projects: projectMap?.projects ?? [] }, null, 2) }] };
   }
 
   // ------------------------------------------------------------------

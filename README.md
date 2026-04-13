@@ -239,7 +239,7 @@ added via `.claude-crap.json`:
 
 ```bash
 npm install          # postinstall builds dist/ automatically
-npm test             # 265 tests across 46 suites
+npm test             # 339 tests across 89 suites
 npm run build:fast   # esbuild dev build (10-20x faster than tsc)
 npm run doctor       # full diagnostic
 ```
