@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-04-13
+
+### Added
+
+- **Monorepo project map** — auto-discovers sub-projects at session boot
+  by probing npm workspaces and `apps/`, `packages/`, `libs/` directories.
+  Persisted to `.claude-crap/projects.json`.
+- **`list_projects` MCP tool** — returns all sub-projects with type, path,
+  recommended scanner, and availability.
+- **Scoped `score_project`** — optional `scope` parameter to score a
+  single sub-project instead of the entire monorepo.
+- **Dart analyzer scanner** — `dart analyze --format=json` → SARIF 2.1.0.
+  Auto-detected in monorepo subdirectories via `pubspec.yaml`.
+- **`dotnet format` scanner** — built-in Roslyn analyzer for C# projects.
+  No extra install needed when .NET SDK is present.
+- **Centralized file exclusions** — shared module replaces 3 independent
+  `SKIP_DIRS` sets. Covers `bundle/`, `vendor/`, `.astro`, `.svelte-kit`,
+  `.dart_tool`, `.expo`, `.angular`, `.turbo`, and 15+ more.
+- **User-configurable `exclude`** — `.claude-crap.json` now supports an
+  `exclude` array with glob patterns and directory exclusions.
+- **Auto-bootstrap ESLint** in monorepos — detects JS/TS sub-projects
+  and installs ESLint at root automatically.
+- **Auto-sync plugin cache** — `npm run build:plugin` syncs to all
+  cached versions under `~/.claude/plugins/cache/`.
+
+### Changed
+
+- C# projects now use `dotnet format` instead of Semgrep.
+- Scanner detector validates `node_modules/.bin/` binary exists before
+  marking a package.json dependency as available.
+- Workspace LOC excludes bundle/vendor files (dropped from ~25K to ~15K
+  for the claude-crap repo itself).
+
 ## [0.3.6] - 2026-04-12
 
 ### Fixed

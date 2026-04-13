@@ -100,8 +100,9 @@ CRAP formula, TDR formula, letter ratings, and adoption strategy.
 | **Stop quality gate** | `plugin/hooks/stop-quality-gate.mjs` | Reads the SARIF store, computes CRAP / TDR / reliability / security ratings, and blocks task close if any metric is outside policy. |
 | **MCP server** | `src/index.ts` | Stdio-transport server exposing CRAP, TDR, tree-sitter AST, and SARIF engines as deterministic tools. |
 | **SARIF store** | `src/sarif/sarif-store.ts` | On-disk consolidated report with finding deduplication. Tolerates malformed entries so a tampered file can't DoS the boot. |
-| **Scanner adapters** | `src/adapters/` | Semgrep, ESLint, Bandit, Stryker — each stamps `effortMinutes` for uniform TDR computation. |
-| **Dashboard** | `src/dashboard/server.ts` | Fastify on `127.0.0.1:5117` serving a Vue 3 SPA. Offline-capable (vendored runtime). Port auto-fallback on conflict. |
+| **Scanner adapters** | `src/adapters/` | ESLint, Semgrep, Bandit, Stryker, `dart analyze`, `dotnet format` — each stamps `effortMinutes` for uniform TDR computation. |
+| **Project map** | `src/monorepo/project-map.ts` | Auto-discovers monorepo sub-projects at boot, persists to `.claude-crap/projects.json`. |
+| **Dashboard** | `src/dashboard/server.ts` | Fastify on `127.0.0.1:5117` serving a Vue 3 SPA. Offline-capable (vendored runtime). PID-based port management. |
 
 All findings are normalized to **SARIF 2.1.0** — one vocabulary,
 exact coordinates, no grep walls in the context window.
@@ -113,7 +114,7 @@ for the boot sequence, data flow, and design decisions.
 
 ## MCP Tools
 
-Nine deterministic tools and two resources, all with strict JSON Schema validation.
+Ten deterministic tools and two resources, all with strict JSON Schema validation.
 
 | Tool | Purpose |
 | :--- | :------ |
@@ -121,11 +122,12 @@ Nine deterministic tools and two resources, all with strict JSON Schema validati
 | `compute_tdr` | Technical Debt Ratio and A..E maintainability rating. |
 | `analyze_file_ast` | Tree-sitter AST metrics: LOC + per-function cyclomatic complexity. TypeScript, JavaScript, Python, Java, C#. |
 | `ingest_sarif` | Merge a raw SARIF 2.1.0 document into the store with deduplication. |
-| `ingest_scanner_output` | Route native scanner output through adapter, enrich with `effortMinutes`, persist as SARIF. |
+| `ingest_scanner_output` | Route native scanner output through adapter, enrich with `effortMinutes`, persist as SARIF. Supports ESLint, Semgrep, Bandit, Stryker, `dart_analyze`, and `dotnet_format`. |
 | `require_test_harness` | Check whether a source file has an accompanying test file. |
-| `score_project` | Aggregate workspace into Maintainability / Reliability / Security / Overall A..E grades. |
-| `auto_scan` | Auto-detect scanners, run them, ingest findings. |
+| `score_project` | Aggregate workspace into A..E grades. Optional `scope` parameter to score a single monorepo sub-project. |
+| `auto_scan` | Auto-detect scanners (including monorepo subdirectories), run them, ingest findings. |
 | `bootstrap_scanner` | Detect project type, install the right scanner, configure, and verify. |
+| `list_projects` | List all discovered monorepo sub-projects with type, scanner, and availability. |
 
 | Resource | Description |
 | :------- | :---------- |
@@ -151,26 +153,66 @@ See [docs/contributing.md](./docs/contributing.md) for Windows setup details.
 
 ## Supported Languages & Scanners
 
-| Language | Extensions | AST analysis | Scanner | Auto-install | Monorepo |
-| :------- | :--------- | :----------: | :------ | :----------: | :------: |
-| TypeScript | `.ts` `.tsx` `.mts` `.cts` | Cyclomatic complexity | ESLint | Yes (npm) | Root |
-| JavaScript | `.js` `.jsx` `.mjs` `.cjs` | Cyclomatic complexity | ESLint | Yes (npm) | Root |
-| Python | `.py` `.pyi` | Cyclomatic complexity | Bandit | Manual | Root |
-| Java | `.java` | Cyclomatic complexity | Semgrep | Manual | Root |
-| C# | `.cs` | Cyclomatic complexity | Semgrep | Manual | Root |
-| Dart / Flutter | `.dart` | LOC only | `dart analyze` | SDK required | Subdir probing |
-| Vue | `.vue` | LOC only | ESLint (via root) | — | — |
-| Go | `.go` | LOC only | — | — | — |
-| Rust | `.rs` | LOC only | — | — | — |
-| Ruby | `.rb` | LOC only | — | — | — |
-| PHP | `.php` | LOC only | — | — | — |
-| Swift | `.swift` | LOC only | — | — | — |
-| Kotlin | `.kt` | LOC only | — | — | — |
-| Scala | `.scala` | LOC only | — | — | — |
+| Language | Extensions | AST analysis | Scanner | Setup |
+| :------- | :--------- | :----------: | :------ | :---- |
+| TypeScript | `.ts` `.tsx` `.mts` `.cts` | Cyclomatic complexity | ESLint | **Auto-installed** via npm |
+| JavaScript | `.js` `.jsx` `.mjs` `.cjs` | Cyclomatic complexity | ESLint | **Auto-installed** via npm |
+| Python | `.py` `.pyi` | Cyclomatic complexity | Bandit | `pip install bandit` |
+| Java | `.java` | Cyclomatic complexity | Semgrep | `brew install semgrep` |
+| C# / .NET | `.cs` | Cyclomatic complexity | `dotnet format` | **Included in .NET SDK** |
+| Dart / Flutter | `.dart` | LOC only | `dart analyze` | **Included in Dart/Flutter SDK** |
+| Vue | `.vue` | LOC only | ESLint (via root config) | Auto with TypeScript |
+| Go | `.go` | LOC only | — | — |
+| Rust | `.rs` | LOC only | — | — |
+| Ruby | `.rb` | LOC only | — | — |
+| PHP | `.php` | LOC only | — | — |
+| Swift | `.swift` | LOC only | — | — |
+| Kotlin | `.kt` | LOC only | — | — |
+| Scala | `.scala` | LOC only | — | — |
 
-**AST analysis** = tree-sitter cyclomatic complexity per function. **LOC only** = counted toward workspace metrics but no per-function analysis.
+**AST analysis** = tree-sitter cyclomatic complexity per function.
+**LOC only** = counted toward workspace metrics but no per-function analysis.
 
-**Monorepo support**: auto-scan probes `apps/`, `packages/`, `libs/` and npm workspaces for scanner configs in subdirectories (e.g., `apps/mobile/pubspec.yaml`).
+### Monorepo auto-discovery
+
+In monorepos, claude-crap automatically discovers sub-projects at
+session startup — no per-project configuration needed. The plugin
+probes npm workspaces and common directories (`apps/`, `packages/`,
+`libs/`, `modules/`, `services/`) to build a **project map**:
+
+```
+Session start
+  → discover project map
+  → detect: www (TypeScript), app (TypeScript), mobile (Dart), api (C#)
+  → ESLint not installed? → auto-install at monorepo root
+  → run ESLint from root (covers all JS/TS)
+  → run dart analyze from apps/mobile/
+  → run dotnet format from apps/api/
+  → aggregate all findings into one SARIF store
+  → score_project ready with real data
+```
+
+The project map is persisted to `.claude-crap/projects.json` and
+exposed via the `list_projects` MCP tool. Use `score_project` with
+the optional `scope` parameter to score a single sub-project:
+
+```ts
+// Score only the mobile app
+score_project({ format: "both", scope: "mobile" })
+```
+
+**File exclusions** are centralized and cover all major frameworks
+out of the box: `dist/`, `build/`, `bundle/`, `vendor/`,
+`.next`, `.nuxt`, `.astro`, `.svelte-kit`, `.dart_tool`,
+`.expo`, `.angular`, `.turbo`, and more. Custom exclusions can be
+added via `.claude-crap.json`:
+
+```jsonc
+{
+  "strictness": "strict",
+  "exclude": ["apps/legacy/", "generated/", "*.proto.ts"]
+}
+```
 
 ---
 
@@ -195,7 +237,7 @@ See [docs/contributing.md](./docs/contributing.md) for Windows setup details.
 
 ```bash
 npm install          # postinstall builds dist/ automatically
-npm test             # 225 tests across 37 suites
+npm test             # 265 tests across 46 suites
 npm run build:fast   # esbuild dev build (10-20x faster than tsc)
 npm run doctor       # full diagnostic
 ```
