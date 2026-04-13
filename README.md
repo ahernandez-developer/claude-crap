@@ -149,6 +149,31 @@ See [docs/contributing.md](./docs/contributing.md) for Windows setup details.
 
 ---
 
+## Supported Languages & Scanners
+
+| Language | Extensions | AST analysis | Scanner | Auto-install | Monorepo |
+| :------- | :--------- | :----------: | :------ | :----------: | :------: |
+| TypeScript | `.ts` `.tsx` `.mts` `.cts` | Cyclomatic complexity | ESLint | Yes (npm) | Root |
+| JavaScript | `.js` `.jsx` `.mjs` `.cjs` | Cyclomatic complexity | ESLint | Yes (npm) | Root |
+| Python | `.py` `.pyi` | Cyclomatic complexity | Bandit | Manual | Root |
+| Java | `.java` | Cyclomatic complexity | Semgrep | Manual | Root |
+| C# | `.cs` | Cyclomatic complexity | Semgrep | Manual | Root |
+| Dart / Flutter | `.dart` | LOC only | `dart analyze` | SDK required | Subdir probing |
+| Vue | `.vue` | LOC only | ESLint (via root) | — | — |
+| Go | `.go` | LOC only | — | — | — |
+| Rust | `.rs` | LOC only | — | — | — |
+| Ruby | `.rb` | LOC only | — | — | — |
+| PHP | `.php` | LOC only | — | — | — |
+| Swift | `.swift` | LOC only | — | — | — |
+| Kotlin | `.kt` | LOC only | — | — | — |
+| Scala | `.scala` | LOC only | — | — | — |
+
+**AST analysis** = tree-sitter cyclomatic complexity per function. **LOC only** = counted toward workspace metrics but no per-function analysis.
+
+**Monorepo support**: auto-scan probes `apps/`, `packages/`, `libs/` and npm workspaces for scanner configs in subdirectories (e.g., `apps/mobile/pubspec.yaml`).
+
+---
+
 ## Documentation
 
 | Section | Link |
