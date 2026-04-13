@@ -265,7 +265,10 @@ function expandWorkspacePattern(
  * @param workspaceRoot Absolute path to the workspace root.
  * @returns             De-duplicated set of absolute sub-project paths.
  */
-function collectSubdirectories(workspaceRoot: string): Set<string> {
+function collectSubdirectories(
+  workspaceRoot: string,
+  extraDirs?: ReadonlyArray<string>,
+): Set<string> {
   const subdirs = new Set<string>();
 
   // 1. npm workspaces
@@ -285,8 +288,40 @@ function collectSubdirectories(workspaceRoot: string): Set<string> {
     }
   }
 
-  // 2. Conventional monorepo directories scanned one level deep.
+  // 2. User-configured projectDirs from .claude-crap.json (highest priority).
+  //    These can be parent directories scanned one level deep (e.g. "apps")
+  //    or direct project paths (e.g. "tools/cli").
+  if (extraDirs && extraDirs.length > 0) {
+    for (const dir of extraDirs) {
+      const absDir = resolve(workspaceRoot, dir);
+      if (!existsSync(absDir)) continue;
+
+      // If the directory itself has a project marker, treat it as a project.
+      const hasMarker = PROJECT_MARKERS.some((m) => existsSync(join(absDir, m)));
+      if (hasMarker) {
+        subdirs.add(absDir);
+        continue;
+      }
+
+      // Otherwise scan one level deep (it's a parent directory like "apps").
+      try {
+        const entries = readdirSync(absDir, { withFileTypes: true });
+        for (const entry of entries) {
+          if (entry.isDirectory() && !entry.name.startsWith(".")) {
+            subdirs.add(join(absDir, entry.name));
+          }
+        }
+      } catch {
+        // Not readable — skip.
+      }
+    }
+  }
+
+  // 3. Conventional monorepo directories scanned one level deep.
+  //    Skipped for directories already covered by user config.
+  const configuredDirNames = new Set(extraDirs?.map((d) => d.split("/")[0]) ?? []);
   for (const dir of MONOREPO_DIRS) {
+    if (configuredDirNames.has(dir)) continue; // User config takes precedence
     const parentDir = join(workspaceRoot, dir);
     try {
       const entries = readdirSync(parentDir, { withFileTypes: true });
@@ -302,6 +337,12 @@ function collectSubdirectories(workspaceRoot: string): Set<string> {
 
   return subdirs;
 }
+
+/** Files that indicate a directory is a project root. */
+const PROJECT_MARKERS = [
+  "package.json", "pubspec.yaml", "pyproject.toml", "setup.py",
+  "pom.xml", "build.gradle", "build.gradle.kts", "Directory.Build.props",
+];
 
 // ── Public API ─────────────────────────────────────────────────────────────
 
@@ -327,8 +368,9 @@ function collectSubdirectories(workspaceRoot: string): Set<string> {
  */
 export async function discoverProjectMap(
   workspaceRoot: string,
+  options?: { projectDirs?: ReadonlyArray<string> },
 ): Promise<ProjectMap> {
-  const subdirs = collectSubdirectories(workspaceRoot);
+  const subdirs = collectSubdirectories(workspaceRoot, options?.projectDirs);
 
   // Cache binary probe results so each unique scanner is only probed once.
   const binaryCache = new Map<string, Promise<boolean>>();

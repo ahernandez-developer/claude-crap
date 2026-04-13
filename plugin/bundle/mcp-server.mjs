@@ -8436,6 +8436,7 @@ var CrapConfigError = class extends Error {
 function loadCrapConfig(options) {
   const fileResult = readFromFile(options.workspaceRoot);
   const exclude = fileResult?.exclude ?? [];
+  const projectDirs = fileResult?.projectDirs ?? [];
   const envRaw = process.env["CLAUDE_CRAP_STRICTNESS"];
   if (typeof envRaw === "string" && envRaw.trim() !== "") {
     const normalized = envRaw.trim().toLowerCase();
@@ -8444,12 +8445,12 @@ function loadCrapConfig(options) {
         `[crap-config] CLAUDE_CRAP_STRICTNESS="${envRaw}" is not a valid strictness. Expected one of: ${STRICTNESS_VALUES.join(", ")}.`
       );
     }
-    return { strictness: normalized, strictnessSource: "env", exclude };
+    return { strictness: normalized, strictnessSource: "env", exclude, projectDirs };
   }
   if (fileResult?.strictness) {
-    return { strictness: fileResult.strictness, strictnessSource: "file", exclude };
+    return { strictness: fileResult.strictness, strictnessSource: "file", exclude, projectDirs };
   }
-  return { strictness: DEFAULT_STRICTNESS, strictnessSource: "default", exclude };
+  return { strictness: DEFAULT_STRICTNESS, strictnessSource: "default", exclude, projectDirs };
 }
 function readFromFile(workspaceRoot) {
   const filePath = join5(workspaceRoot, ".claude-crap.json");
@@ -8510,7 +8511,24 @@ function readFromFile(workspaceRoot) {
     }
     exclude = raw2;
   }
-  return { strictness, exclude };
+  let projectDirs = [];
+  if ("projectDirs" in doc) {
+    const raw2 = doc["projectDirs"];
+    if (!Array.isArray(raw2)) {
+      throw new CrapConfigError(
+        `[crap-config] ${filePath}: 'projectDirs' must be an array of strings`
+      );
+    }
+    for (const item of raw2) {
+      if (typeof item !== "string") {
+        throw new CrapConfigError(
+          `[crap-config] ${filePath}: every entry in 'projectDirs' must be a string, got ${typeof item}`
+        );
+      }
+    }
+    projectDirs = raw2;
+  }
+  return { strictness, exclude, projectDirs };
 }
 function isStrictness(value) {
   return STRICTNESS_VALUES.includes(value);
@@ -9605,7 +9623,7 @@ function expandWorkspacePattern(workspaceRoot, pattern) {
     return [];
   }
 }
-function collectSubdirectories(workspaceRoot) {
+function collectSubdirectories(workspaceRoot, extraDirs) {
   const subdirs = /* @__PURE__ */ new Set();
   const pkgPath = join12(workspaceRoot, "package.json");
   if (existsSync6(pkgPath)) {
@@ -9621,7 +9639,29 @@ function collectSubdirectories(workspaceRoot) {
     } catch {
     }
   }
+  if (extraDirs && extraDirs.length > 0) {
+    for (const dir of extraDirs) {
+      const absDir = resolve7(workspaceRoot, dir);
+      if (!existsSync6(absDir)) continue;
+      const hasMarker = PROJECT_MARKERS.some((m) => existsSync6(join12(absDir, m)));
+      if (hasMarker) {
+        subdirs.add(absDir);
+        continue;
+      }
+      try {
+        const entries = readdirSync3(absDir, { withFileTypes: true });
+        for (const entry of entries) {
+          if (entry.isDirectory() && !entry.name.startsWith(".")) {
+            subdirs.add(join12(absDir, entry.name));
+          }
+        }
+      } catch {
+      }
+    }
+  }
+  const configuredDirNames = new Set(extraDirs?.map((d) => d.split("/")[0]) ?? []);
   for (const dir of MONOREPO_DIRS2) {
+    if (configuredDirNames.has(dir)) continue;
     const parentDir = join12(workspaceRoot, dir);
     try {
       const entries = readdirSync3(parentDir, { withFileTypes: true });
@@ -9635,8 +9675,18 @@ function collectSubdirectories(workspaceRoot) {
   }
   return subdirs;
 }
-async function discoverProjectMap(workspaceRoot) {
-  const subdirs = collectSubdirectories(workspaceRoot);
+var PROJECT_MARKERS = [
+  "package.json",
+  "pubspec.yaml",
+  "pyproject.toml",
+  "setup.py",
+  "pom.xml",
+  "build.gradle",
+  "build.gradle.kts",
+  "Directory.Build.props"
+];
+async function discoverProjectMap(workspaceRoot, options) {
+  const subdirs = collectSubdirectories(workspaceRoot, options?.projectDirs);
   const binaryCache = /* @__PURE__ */ new Map();
   const probeScanner = (scanner) => {
     const binaryName = BINARY_FOR_SCANNER[scanner];
@@ -9865,11 +9915,16 @@ async function main() {
     "claude-crap MCP server starting"
   );
   let userExclusions = [];
+  let userProjectDirs = [];
   try {
     const crapConfig = loadCrapConfig({ workspaceRoot: config.pluginRoot });
     userExclusions = crapConfig.exclude;
+    userProjectDirs = crapConfig.projectDirs;
     if (userExclusions.length > 0) {
       logger.info({ exclude: userExclusions }, "user exclusions loaded from .claude-crap.json");
+    }
+    if (userProjectDirs.length > 0) {
+      logger.info({ projectDirs: userProjectDirs }, "user projectDirs loaded from .claude-crap.json");
     }
   } catch {
   }
@@ -9885,7 +9940,7 @@ async function main() {
   );
   let projectMap = null;
   try {
-    projectMap = await discoverProjectMap(config.pluginRoot);
+    projectMap = await discoverProjectMap(config.pluginRoot, { projectDirs: userProjectDirs });
     if (projectMap.isMonorepo) {
       logger.info(
         { projects: projectMap.projects.map((p) => `${p.name}(${p.type})`), count: projectMap.projects.length },
@@ -9899,7 +9954,7 @@ async function main() {
         logger.info("monorepo: JS/TS projects detected but ESLint not installed \u2014 bootstrapping");
         try {
           await bootstrapScanner(config.pluginRoot, sarifStore, logger);
-          projectMap = await discoverProjectMap(config.pluginRoot);
+          projectMap = await discoverProjectMap(config.pluginRoot, { projectDirs: userProjectDirs });
           await persistProjectMap(projectMap, config.pluginRoot);
         } catch (err) {
           logger.warn({ err: err.message }, "monorepo ESLint bootstrap failed");

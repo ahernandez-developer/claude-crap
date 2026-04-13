@@ -95,13 +95,18 @@ async function main(): Promise<void> {
     "claude-crap MCP server starting",
   );
 
-  // Load user-defined exclusions from .claude-crap.json (non-fatal).
+  // Load user-defined exclusions and projectDirs from .claude-crap.json (non-fatal).
   let userExclusions: ReadonlyArray<string> = [];
+  let userProjectDirs: ReadonlyArray<string> = [];
   try {
     const crapConfig = loadCrapConfig({ workspaceRoot: config.pluginRoot });
     userExclusions = crapConfig.exclude;
+    userProjectDirs = crapConfig.projectDirs;
     if (userExclusions.length > 0) {
       logger.info({ exclude: userExclusions }, "user exclusions loaded from .claude-crap.json");
+    }
+    if (userProjectDirs.length > 0) {
+      logger.info({ projectDirs: userProjectDirs }, "user projectDirs loaded from .claude-crap.json");
     }
   } catch {
     // Non-fatal — use empty exclusions.
@@ -122,7 +127,7 @@ async function main(): Promise<void> {
   // Discover monorepo project map (non-fatal).
   let projectMap: ProjectMap | null = null;
   try {
-    projectMap = await discoverProjectMap(config.pluginRoot);
+    projectMap = await discoverProjectMap(config.pluginRoot, { projectDirs: userProjectDirs });
     if (projectMap.isMonorepo) {
       logger.info(
         { projects: projectMap.projects.map((p) => `${p.name}(${p.type})`), count: projectMap.projects.length },
@@ -141,7 +146,7 @@ async function main(): Promise<void> {
         try {
           await bootstrapScanner(config.pluginRoot, sarifStore, logger);
           // Re-discover after install so scannerAvailable reflects reality
-          projectMap = await discoverProjectMap(config.pluginRoot);
+          projectMap = await discoverProjectMap(config.pluginRoot, { projectDirs: userProjectDirs });
           await persistProjectMap(projectMap, config.pluginRoot);
         } catch (err) {
           logger.warn({ err: (err as Error).message }, "monorepo ESLint bootstrap failed");
