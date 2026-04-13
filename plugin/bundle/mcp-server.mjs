@@ -8455,10 +8455,13 @@ async function detectScanners(workspaceRoot) {
         };
       }
       if (probePackageJson(workspaceRoot, scanner)) {
+        const binName = SCANNER_SIGNALS[scanner].binaryNames[0];
+        const binPath = binName ? join7(workspaceRoot, "node_modules", ".bin", binName) : null;
+        const installed = binPath !== null && existsSync2(binPath);
         return {
           scanner,
-          available: true,
-          reason: `found in package.json dependencies`
+          available: installed,
+          reason: installed ? "found in package.json and installed" : `found in package.json but not installed (run \`npm install\`)`
         };
       }
       const signals = SCANNER_SIGNALS[scanner];
@@ -8902,6 +8905,7 @@ var SKIP_DIRS3 = /* @__PURE__ */ new Set([
   ".git",
   "dist",
   "build",
+  "bundle",
   "out",
   "target",
   ".venv",

@@ -188,12 +188,18 @@ export async function detectScanners(
         };
       }
 
-      // 2. Package.json probe
+      // 2. Package.json probe — declared in deps/devDeps, but is it
+      //    actually installed? Check node_modules/.bin/ for the binary.
       if (probePackageJson(workspaceRoot, scanner)) {
+        const binName = SCANNER_SIGNALS[scanner].binaryNames[0];
+        const binPath = binName ? join(workspaceRoot, "node_modules", ".bin", binName) : null;
+        const installed = binPath !== null && existsSync(binPath);
         return {
           scanner,
-          available: true,
-          reason: `found in package.json dependencies`,
+          available: installed,
+          reason: installed
+            ? "found in package.json and installed"
+            : `found in package.json but not installed (run \`npm install\`)`,
         };
       }
 

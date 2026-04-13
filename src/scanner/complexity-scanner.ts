@@ -35,6 +35,7 @@ const SKIP_DIRS: ReadonlySet<string> = new Set([
   ".git",
   "dist",
   "build",
+  "bundle",
   "out",
   "target",
   ".venv",
