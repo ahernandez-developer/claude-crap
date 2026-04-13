@@ -15,7 +15,6 @@
  */
 
 import { promises as fs } from "node:fs";
-
 import { resolveWithinWorkspace } from "../workspace-guard.js";
 import { detectLanguageFromPath, type SupportedLanguage } from "../ast/language-config.js";
 import type { TreeSitterEngine, FunctionMetrics } from "../ast/tree-sitter-engine.js";
