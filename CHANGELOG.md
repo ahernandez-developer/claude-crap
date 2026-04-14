@@ -5,6 +5,90 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.3] - 2026-04-13
+
+### Fixed
+
+- **MCP server workspace root resolution** — `score_project`, `auto_scan`,
+  and every other MCP tool now reliably resolve the user's workspace
+  instead of writing reports into the plugin cache directory.
+  - The 0.3.6-and-earlier code only checked `CLAUDE_CRAP_PLUGIN_ROOT`
+    and `process.cwd()`. Claude Code spawns MCP servers with `cwd` set
+    to the plugin cache (`~/.claude/plugins/cache/herz/claude-crap/<v>/`),
+    so SARIF reports landed in the cache instead of the project.
+  - `loadConfig()` now delegates to `discoverWorkspaceRoot()`, which
+    walks a 4-strategy chain: `CLAUDE_PROJECT_DIR` → `CLAUDE_CRAP_PLUGIN_ROOT`
+    → parent process cwd (via `lsof` on macOS, `/proc/<pid>/cwd` on
+    Linux) → `process.cwd()`.
+  - **Defensive `${...}` literal detection.** Any env var whose value
+    matches `^${VAR_NAME}$` is treated as unset, so an unexpanded
+    `.mcp.json` template never leaks through as a "valid" path. This
+    catches a bug in the v0.4.3-rc.1 fix that set
+    `"CLAUDE_PROJECT_DIR": "${CLAUDE_PROJECT_DIR}"` in `.mcp.json` env,
+    which Claude Code does not expand (only `${CLAUDE_PLUGIN_ROOT}` is
+    expanded in `.mcp.json`).
+- **Stale plugin-cache version sync** — `npm run build:plugin` continues
+  to sync the freshly built bundle into every `~/.claude/plugins/cache/`
+  version, so users on stale cached versions (0.3.6, 0.4.0, etc.) pick
+  up the workspace fix without a manual reinstall.
+
+### Added
+
+- **`discoverWorkspaceRoot(options)`** export from `src/config.ts` with
+  an injectable `readParentCwd` for testability.
+- **27 characterization tests** for `loadConfig` and
+  `discoverWorkspaceRoot` covering env priority, defaults, numeric and
+  rating parsing, literal `${...}` detection on every source, parent-cwd
+  fallback ordering, and the `process.cwd()` last-resort. Suite total:
+  366 tests, 95 suites.
+
+## [0.4.2] - 2026-04-13
+
+### Changed
+
+- **Default strictness changed from `strict` to `warn`** so existing
+  projects with findings can adopt the plugin without being hard-blocked
+  on every task close. Teams that want hard enforcement set
+  `"strictness": "strict"` in `.claude-crap.json` explicitly.
+
+### Fixed
+
+- **Plugin infrastructure directories excluded from scans** — added
+  `plugin/`, `hooks/`, `skills/`, `.claude-plugin/`, and `.claude-sonar/`
+  to `DEFAULT_SKIP_DIRS`. These directories used to inflate workspace
+  LOC totals and produce false complexity hotspots in the dashboard.
+  The hooks-layer `LOC_WALK_SKIP_DIRS` was synced to match so the Stop
+  quality gate computes TDR over the same file set as the MCP server.
+
+## [0.4.1] - 2026-04-13
+
+### Fixed
+
+- **Launcher dependency validation** — the launcher now verifies that
+  every externalized package (`@modelcontextprotocol/sdk`, `fastify`,
+  `@fastify/static`, `pino`, `web-tree-sitter`, `tree-sitter-wasms`,
+  `picomatch`) actually exists inside `node_modules/` instead of just
+  checking that the directory is present. Fixes the case where a new
+  dependency was added but cached `node_modules/` is stale.
+- **Cache sync clears stale `node_modules/`** — `build:plugin` now
+  deletes `node_modules/` in every cached plugin version after copying
+  updated files, forcing the launcher to re-install with the correct
+  dependency set on the next session boot.
+
+### Changed
+
+- **`handleToolCall` refactored** — the 10-case switch (cyclomatic
+  complexity 32) was extracted into 10 named handlers, leaving
+  `handleToolCall` as a thin dispatcher (CC 11). Each handler handles
+  exactly one MCP tool and is independently testable.
+
+### Added
+
+- **`docs/supported-languages.md`** — per-language setup, detection
+  rules, scanner behavior, monorepo discovery, file exclusions, and a
+  walkthrough for adding a new language. Linked from the README
+  Documentation section.
+
 ## [0.4.0] - 2026-04-13
 
 ### Added
