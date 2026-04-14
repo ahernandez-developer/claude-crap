@@ -7440,8 +7440,16 @@ var DEFAULT_SKIP_DIRS = /* @__PURE__ */ new Set([
   // Gradle
   // IDE state
   ".idea",
+  // Plugin infrastructure (excluded so the plugin's own hook/bundle
+  // files don't pollute workspace metrics when developing the plugin
+  // itself, and don't appear in scans of any project)
+  "plugin",
+  "hooks",
+  "skills",
   // Plugin state
   ".claude-crap",
+  ".claude-plugin",
+  ".claude-sonar",
   ".codesight"
 ]);
 var DEFAULT_SKIP_PATTERNS = [
@@ -8426,7 +8434,7 @@ function validateSarifDocument(doc) {
 import { readFileSync as readFileSync2 } from "node:fs";
 import { join as join5 } from "node:path";
 var STRICTNESS_VALUES = ["strict", "warn", "advisory"];
-var DEFAULT_STRICTNESS = "strict";
+var DEFAULT_STRICTNESS = "warn";
 var CrapConfigError = class extends Error {
   constructor(message) {
     super(message);

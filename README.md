@@ -62,15 +62,16 @@ automatically — no further setup required.
 
 ## Configuration
 
-> **Default: `strict`.** No config file needed. The Stop gate
-> hard-fails on any policy violation out of the box.
+> **Default: `warn`.** No config file needed. The Stop gate
+> shows all violations but lets tasks close. Teams that want
+> hard enforcement can set `"strict"` in `.claude-crap.json`.
 
 The `strictness` value controls how the Stop gate reacts to failures:
 
 | Mode       | Stop exit | Effect                                                         |
 | :--------- | :-------: | :------------------------------------------------------------- |
-| `strict`   |    `2`    | Task cannot close until rules pass. **Default.**               |
-| `warn`     |    `0`    | Full verdict visible to agent, but task closes.                |
+| `strict`   |    `2`    | Task cannot close until rules pass.                            |
+| `warn`     |    `0`    | Full verdict visible to agent, but task closes. **Default.**   |
 | `advisory` |    `0`    | Single-line nudge only.                                        |
 
 Override per workspace:
@@ -78,13 +79,13 @@ Override per workspace:
 ```jsonc
 // .claude-crap.json — commit to git for team-wide policy
 {
-  "strictness": "warn"
+  "strictness": "strict"
 }
 ```
 
-Or per session: `CLAUDE_CRAP_STRICTNESS=advisory claude`
+Or per session: `CLAUDE_CRAP_STRICTNESS=strict claude`
 
-**Precedence:** env var > `.claude-crap.json` > hardcoded `strict`.
+**Precedence:** env var > `.claude-crap.json` > hardcoded `warn`.
 
 See [docs/quality-gate.md](./docs/quality-gate.md) for the full
 CRAP formula, TDR formula, letter ratings, and adoption strategy.

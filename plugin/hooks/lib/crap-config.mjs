@@ -42,7 +42,7 @@ export const STRICTNESS_VALUES = Object.freeze(["strict", "warn", "advisory"]);
  *
  * @type {Strictness}
  */
-export const DEFAULT_STRICTNESS = "strict";
+export const DEFAULT_STRICTNESS = "warn";
 
 /**
  * Error thrown by {@link loadCrapConfig} when the configuration is

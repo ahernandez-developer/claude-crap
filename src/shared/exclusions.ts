@@ -61,8 +61,17 @@ export const DEFAULT_SKIP_DIRS: ReadonlySet<string> = new Set([
   // IDE state
   ".idea",
 
+  // Plugin infrastructure (excluded so the plugin's own hook/bundle
+  // files don't pollute workspace metrics when developing the plugin
+  // itself, and don't appear in scans of any project)
+  "plugin",
+  "hooks",
+  "skills",
+
   // Plugin state
   ".claude-crap",
+  ".claude-plugin",
+  ".claude-sonar",
   ".codesight",
 ]);
 

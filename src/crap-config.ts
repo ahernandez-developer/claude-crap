@@ -53,9 +53,11 @@ export type Strictness = (typeof STRICTNESS_VALUES)[number];
 /**
  * Hardcoded default used when neither the environment variable nor
  * `.claude-crap.json` provides a value. Chosen as `"strict"` so the
- * plugin's hard-failing Stop gate stays the default experience.
+ * plugin adopts gradually on existing codebases without blocking.
+ * Teams that want hard enforcement can set `"strict"` in
+ * `.claude-crap.json` or via `CLAUDE_CRAP_STRICTNESS=strict`.
  */
-export const DEFAULT_STRICTNESS: Strictness = "strict";
+export const DEFAULT_STRICTNESS: Strictness = "warn";
 
 /**
  * Thrown by {@link loadCrapConfig} when the configuration is
