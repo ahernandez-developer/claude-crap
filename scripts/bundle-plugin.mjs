@@ -143,6 +143,18 @@ async function syncToPluginCache(pluginDir) {
           await cp(src, dst, { force: true });
         }
       }
+
+      // Delete cached node_modules so the launcher re-installs with
+      // the updated package.json deps on next boot. This handles the
+      // case where a new dependency (e.g. picomatch) was added but
+      // the cached node_modules is stale.
+      const cachedNm = join(cacheDir, "node_modules");
+      try {
+        await rm(cachedNm, { recursive: true, force: true });
+      } catch {
+        // May not exist — that's fine.
+      }
+
       process.stderr.write(`  ✓ synced plugin cache: ${cacheDir}\n`);
     } catch (err) {
       process.stderr.write(`  ⚠ cache sync failed for ${cacheDir}: ${err.message}\n`);
