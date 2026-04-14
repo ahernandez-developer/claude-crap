@@ -167,13 +167,12 @@ describe(
       if (workspace) await rm(workspace, { recursive: true, force: true });
     });
 
-    it("default (no env, no file) → exit 2 + stderr box (strict is the default)", async () => {
+    it("default (no env, no file) → exit 0 + stdout warning (warn is the default)", async () => {
       const result = await runStopHook(workspace, {
         CLAUDE_CRAP_STRICTNESS: undefined,
       });
-      assert.equal(result.code, 2, `stderr was: ${result.stderr}`);
-      assert.match(result.stderr, /Stop quality gate BLOCKED/);
-      assert.match(result.stderr, /SONAR-GATE-ERRORS/);
+      assert.equal(result.code, 0, `stderr was: ${result.stderr}`);
+      assert.match(result.stdout, /Stop quality gate WARNING/);
     });
 
     it("CLAUDE_CRAP_STRICTNESS=strict → exit 2 + stderr box", async () => {

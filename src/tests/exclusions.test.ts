@@ -65,7 +65,7 @@ describe("createExclusionFilter", () => {
       const filter = createExclusionFilter();
       assert.equal(filter.shouldSkipDir(".hidden"), true);
       assert.equal(filter.shouldSkipDir(".secret"), true);
-      assert.equal(filter.shouldSkipDir(".claude-plugin"), false);
+      assert.equal(filter.shouldSkipDir(".claude-plugin"), true);
     });
 
     it("respects user directory exclusions with trailing slash", () => {

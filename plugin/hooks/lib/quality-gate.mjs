@@ -144,20 +144,23 @@ async function readConsolidatedFindings(path) {
  * TDR policy is not meant to penalize.
  */
 const LOC_WALK_SKIP_DIRS = new Set([
-  "node_modules",
+  // Package managers / vendored deps
+  "node_modules", "vendor",
+  // VCS
   ".git",
-  "dist",
-  "build",
-  "out",
-  "target",
-  ".venv",
-  "venv",
-  "__pycache__",
-  ".cache",
-  ".next",
-  ".nuxt",
-  ".claude-crap",
-  ".codesight",
+  // Build outputs
+  "dist", "build", "bundle", "out", "target", "coverage",
+  // Framework build outputs
+  ".next", ".nuxt", ".output", ".vercel", ".svelte-kit",
+  ".astro", ".angular", ".turbo", ".parcel-cache", ".expo",
+  // Language-specific caches
+  ".venv", "venv", "__pycache__", ".cache", ".dart_tool", ".gradle",
+  // IDE state
+  ".idea",
+  // Plugin infrastructure
+  "plugin", "hooks", "skills",
+  // Plugin state
+  ".claude-crap", ".claude-plugin", ".claude-sonar", ".codesight",
 ]);
 
 /**

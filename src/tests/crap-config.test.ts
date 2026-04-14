@@ -66,10 +66,10 @@ describe("loadCrapConfig — characterization (defaults and valid inputs)", () =
     restoreEnv();
   });
 
-  it("defaults to 'strict' when neither env nor file is present", () => {
+  it("defaults to 'warn' when neither env nor file is present", () => {
     const config = loadCrapConfig({ workspaceRoot: workspace });
-    assert.equal(config.strictness, "strict");
-    assert.equal(DEFAULT_STRICTNESS, "strict");
+    assert.equal(config.strictness, "warn");
+    assert.equal(DEFAULT_STRICTNESS, "warn");
   });
 
   it("exposes the exhaustive list of strictness values as a readonly tuple", () => {
@@ -141,7 +141,7 @@ describe("loadCrapConfig — characterization (defaults and valid inputs)", () =
     const path = join(workspace, ".claude-crap.json");
     await fs.writeFile(path, JSON.stringify({ somethingElse: true }), "utf8");
     const config = loadCrapConfig({ workspaceRoot: workspace });
-    assert.equal(config.strictness, "strict");
+    assert.equal(config.strictness, "warn");
     await fs.unlink(path);
   });
 });
