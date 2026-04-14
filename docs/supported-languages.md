@@ -180,6 +180,18 @@ diagnostic has `code`, `severity` (ERROR/WARNING/INFO), `location`
 tree-sitter cyclomatic complexity is not available (no Dart grammar
 in the current tree-sitter-wasms package).
 
+> **Known limitation — Dart complexity blind spot.** The built-in
+> cyclomatic complexity scanner (`complexity/cyclomatic-max`) is silent
+> on `.dart` files because `tree-sitter-wasms` does not yet ship a
+> Dart grammar. A Flutter sub-project can still earn a perfect
+> Maintainability rating even if it contains a 150-line `build()` method,
+> because the only complexity signal for Dart comes from `dart analyze`
+> lint rules (which don't directly measure cyclomatic complexity).
+> Mitigation: treat Dart `score_project` readings as a lint-quality
+> signal rather than a complexity signal, and rely on Dart-specific
+> complexity tooling (e.g. `dart_code_metrics`) for per-function
+> measurement until upstream grammar support lands.
+
 **SARIF mapping:**
 
 | Dart severity | SARIF level | Effort estimate |

@@ -392,19 +392,29 @@ async function main(): Promise<void> {
     const typed = args as { format?: "markdown" | "json" | "both"; scope?: string };
     const format = typed.format ?? "both";
     let scoreRoot = config.pluginRoot;
+    let filterPathPrefix: string | undefined;
     if (typed.scope && projectMap) {
       const project = projectMap.projects.find((p) => p.name === typed.scope);
       if (project) {
         const { join } = await import("node:path");
         scoreRoot = join(config.pluginRoot, project.path);
+        // Normalize to POSIX so the score engine's prefix match lines
+        // up with the SARIF store's canonical URI form.
+        filterPathPrefix = project.path.replace(/\\/g, "/").replace(/\/+$/, "");
       }
     }
     try {
       const workspace = await estimateWorkspaceLoc(scoreRoot, { exclude: userExclusions });
       const score: ProjectScore = computeProjectScore({
-        workspaceRoot: scoreRoot, minutesPerLoc: config.minutesPerLoc, tdrMaxRating: config.tdrMaxRating,
+        workspaceRoot: scoreRoot,
+        minutesPerLoc: config.minutesPerLoc,
+        tdrMaxRating: config.tdrMaxRating,
         workspace: { physicalLoc: workspace.physicalLoc, fileCount: workspace.fileCount },
-        sarifStore, dashboardUrl: dashboard?.url ?? null, sarifReportPath: sarifStore.consolidatedReportPath,
+        sarifStore,
+        dashboardUrl: dashboard?.url ?? null,
+        sarifReportPath: sarifStore.consolidatedReportPath,
+        ...(filterPathPrefix !== undefined ? { filterPathPrefix } : {}),
+        scopeWorkspaceRoot: config.pluginRoot,
       });
       const blocks: Array<{ type: "text"; text: string }> = [];
       if (format === "markdown" || format === "both") blocks.push({ type: "text", text: renderProjectScoreMarkdown(score) });

@@ -2977,7 +2977,7 @@ var require_compile = __commonJS({
       const schOrFunc = root.refs[ref];
       if (schOrFunc)
         return schOrFunc;
-      let _sch = resolve8.call(this, root, ref);
+      let _sch = resolve9.call(this, root, ref);
       if (_sch === void 0) {
         const schema = (_a = root.localRefs) === null || _a === void 0 ? void 0 : _a[ref];
         const { schemaId } = this.opts;
@@ -3004,7 +3004,7 @@ var require_compile = __commonJS({
     function sameSchemaEnv(s1, s2) {
       return s1.schema === s2.schema && s1.root === s2.root && s1.baseId === s2.baseId;
     }
-    function resolve8(root, ref) {
+    function resolve9(root, ref) {
       let sch;
       while (typeof (sch = this.refs[ref]) == "string")
         ref = sch;
@@ -3579,55 +3579,55 @@ var require_fast_uri = __commonJS({
       }
       return uri;
     }
-    function resolve8(baseURI, relativeURI, options) {
+    function resolve9(baseURI, relativeURI, options) {
       const schemelessOptions = options ? Object.assign({ scheme: "null" }, options) : { scheme: "null" };
       const resolved = resolveComponent(parse(baseURI, schemelessOptions), parse(relativeURI, schemelessOptions), schemelessOptions, true);
       schemelessOptions.skipEscape = true;
       return serialize(resolved, schemelessOptions);
     }
-    function resolveComponent(base, relative4, options, skipNormalization) {
+    function resolveComponent(base, relative6, options, skipNormalization) {
       const target = {};
       if (!skipNormalization) {
         base = parse(serialize(base, options), options);
-        relative4 = parse(serialize(relative4, options), options);
+        relative6 = parse(serialize(relative6, options), options);
       }
       options = options || {};
-      if (!options.tolerant && relative4.scheme) {
-        target.scheme = relative4.scheme;
-        target.userinfo = relative4.userinfo;
-        target.host = relative4.host;
-        target.port = relative4.port;
-        target.path = removeDotSegments(relative4.path || "");
-        target.query = relative4.query;
+      if (!options.tolerant && relative6.scheme) {
+        target.scheme = relative6.scheme;
+        target.userinfo = relative6.userinfo;
+        target.host = relative6.host;
+        target.port = relative6.port;
+        target.path = removeDotSegments(relative6.path || "");
+        target.query = relative6.query;
       } else {
-        if (relative4.userinfo !== void 0 || relative4.host !== void 0 || relative4.port !== void 0) {
-          target.userinfo = relative4.userinfo;
-          target.host = relative4.host;
-          target.port = relative4.port;
-          target.path = removeDotSegments(relative4.path || "");
-          target.query = relative4.query;
+        if (relative6.userinfo !== void 0 || relative6.host !== void 0 || relative6.port !== void 0) {
+          target.userinfo = relative6.userinfo;
+          target.host = relative6.host;
+          target.port = relative6.port;
+          target.path = removeDotSegments(relative6.path || "");
+          target.query = relative6.query;
         } else {
-          if (!relative4.path) {
+          if (!relative6.path) {
             target.path = base.path;
-            if (relative4.query !== void 0) {
-              target.query = relative4.query;
+            if (relative6.query !== void 0) {
+              target.query = relative6.query;
             } else {
               target.query = base.query;
             }
           } else {
-            if (relative4.path[0] === "/") {
-              target.path = removeDotSegments(relative4.path);
+            if (relative6.path[0] === "/") {
+              target.path = removeDotSegments(relative6.path);
             } else {
               if ((base.userinfo !== void 0 || base.host !== void 0 || base.port !== void 0) && !base.path) {
-                target.path = "/" + relative4.path;
+                target.path = "/" + relative6.path;
               } else if (!base.path) {
-                target.path = relative4.path;
+                target.path = relative6.path;
               } else {
-                target.path = base.path.slice(0, base.path.lastIndexOf("/") + 1) + relative4.path;
+                target.path = base.path.slice(0, base.path.lastIndexOf("/") + 1) + relative6.path;
               }
               target.path = removeDotSegments(target.path);
             }
-            target.query = relative4.query;
+            target.query = relative6.query;
           }
           target.userinfo = base.userinfo;
           target.host = base.host;
@@ -3635,7 +3635,7 @@ var require_fast_uri = __commonJS({
         }
         target.scheme = base.scheme;
       }
-      target.fragment = relative4.fragment;
+      target.fragment = relative6.fragment;
       return target;
     }
     function equal(uriA, uriB, options) {
@@ -3806,7 +3806,7 @@ var require_fast_uri = __commonJS({
     var fastUri = {
       SCHEMES,
       normalize,
-      resolve: resolve8,
+      resolve: resolve9,
       resolveComponent,
       equal,
       serialize,
@@ -7434,7 +7434,7 @@ function loadConfig() {
 
 // src/dashboard/server.ts
 import { promises as fs3, existsSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
-import { dirname as dirname2, join as join2, resolve as resolve3 } from "node:path";
+import { dirname as dirname2, join as join2, resolve as resolve4 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
@@ -7541,6 +7541,9 @@ function createExclusionFilter(userExclusions) {
   };
 }
 
+// src/metrics/score.ts
+import { isAbsolute, relative, resolve as resolve2 } from "node:path";
+
 // src/metrics/tdr.ts
 var RATING_ORDER = ["A", "B", "C", "D", "E"];
 function ratingToRank(rating) {
@@ -7586,7 +7589,11 @@ function computeTdr(input) {
 // src/metrics/score.ts
 var SECURITY_RULE_PATTERN = /(sec|sql|xss|csrf|ssrf|injection|crypt|auth|secret|password|token|cve|vuln|jwt|cors|rce|deserial|prototype-pollution)/i;
 function computeProjectScore(input) {
-  const findingsList = input.sarifStore.list();
+  const findingsList = filterFindingsByPrefix(
+    input.sarifStore.list(),
+    input.filterPathPrefix,
+    input.scopeWorkspaceRoot ?? input.workspaceRoot
+  );
   const byTool = {};
   const byFile = {};
   let errorCount = 0;
@@ -7650,6 +7657,32 @@ function computeProjectScore(input) {
     }
   };
 }
+function filterFindingsByPrefix(findings, prefix, workspaceRoot) {
+  if (!prefix) return findings;
+  const normalizedPrefix = prefix.replace(/\\/g, "/").replace(/\/+$/, "");
+  if (!normalizedPrefix) return findings;
+  const root = resolve2(workspaceRoot);
+  return findings.filter((f) => {
+    const uri = relativizeForMatch(f.location.uri, root);
+    return uri === normalizedPrefix || uri.startsWith(`${normalizedPrefix}/`);
+  });
+}
+function relativizeForMatch(uri, workspaceRoot) {
+  let path = uri;
+  if (path.startsWith("file://")) {
+    try {
+      path = new URL(path).pathname;
+    } catch {
+    }
+  }
+  if (isAbsolute(path)) {
+    const rel = relative(workspaceRoot, path);
+    if (rel && !rel.startsWith("..")) {
+      path = rel;
+    }
+  }
+  return path.replace(/\\/g, "/");
+}
 function scoreDimension(findings) {
   let errorCount = 0;
   let warningCount = 0;
@@ -7707,10 +7740,10 @@ function renderProjectScoreMarkdown(score) {
 import { promises as fs2 } from "node:fs";
 
 // src/workspace-guard.ts
-import { isAbsolute, resolve as resolve2, sep } from "node:path";
+import { isAbsolute as isAbsolute2, resolve as resolve3, sep } from "node:path";
 function resolveWithinWorkspace(workspaceRoot, filePath) {
-  const workspace = resolve2(workspaceRoot);
-  const candidate = isAbsolute(filePath) ? resolve2(filePath) : resolve2(workspace, filePath);
+  const workspace = resolve3(workspaceRoot);
+  const candidate = isAbsolute2(filePath) ? resolve3(filePath) : resolve3(workspace, filePath);
   if (candidate !== workspace && !candidate.startsWith(workspace + sep)) {
     throw new Error(
       `[claude-crap] Refusing to access '${filePath}' \u2014 path escapes the workspace root`
@@ -7875,19 +7908,19 @@ async function resolvePublicRoot(logger2) {
   const here = dirname2(fileURLToPath2(import.meta.url));
   const candidates = [
     // 0. Bundled layout: plugin/bundle/mcp-server.mjs → ./dashboard/public
-    resolve3(here, "dashboard", "public"),
+    resolve4(here, "dashboard", "public"),
     // 1. Compiled layout: dist/dashboard/server.js → ./public next to it
     //    (only present if a build step copies the assets — not used
     //    today, but accepted so a future copy step does not break us).
-    resolve3(here, "public"),
+    resolve4(here, "public"),
     // 2. Source-relative layout: dist/dashboard/server.js → ../../src/dashboard/public
     //    This is the default — no copy step required because we resolve
     //    upward from `dist/` into `src/` at runtime.
-    resolve3(here, "..", "..", "src", "dashboard", "public")
+    resolve4(here, "..", "..", "src", "dashboard", "public")
   ];
   for (const candidate of candidates) {
     try {
-      await fs3.access(resolve3(candidate, "index.html"));
+      await fs3.access(resolve4(candidate, "index.html"));
       return candidate;
     } catch {
     }
@@ -8066,7 +8099,7 @@ function computeCrap(input, threshold) {
 
 // src/metrics/workspace-walker.ts
 import { promises as fs4 } from "node:fs";
-import { join as join3, relative } from "node:path";
+import { join as join3, relative as relative2 } from "node:path";
 var CODE_EXTENSIONS = /* @__PURE__ */ new Set([
   ".ts",
   ".tsx",
@@ -8117,7 +8150,7 @@ async function estimateWorkspaceLoc(workspaceRoot, options) {
       if (dot < 0) continue;
       const ext = lower.substring(dot);
       if (!CODE_EXTENSIONS.has(ext)) continue;
-      const relPath = relative(workspaceRoot, full);
+      const relPath = relative2(workspaceRoot, full);
       if (filter.shouldSkipFile(relPath, entry.name)) continue;
       fileCount += 1;
       if (fileCount > MAX_FILES_WALKED) {
@@ -8140,7 +8173,7 @@ async function estimateWorkspaceLoc(workspaceRoot, options) {
 
 // src/sarif/sarif-store.ts
 import { promises as fs5 } from "node:fs";
-import { dirname as dirname3, isAbsolute as isAbsolute2, join as join4, resolve as resolve4 } from "node:path";
+import { dirname as dirname3, isAbsolute as isAbsolute3, join as join4, relative as relative3, resolve as resolve5 } from "node:path";
 
 // src/sarif/sarif-builder.ts
 function buildSarifDocument(tool, findings) {
@@ -8197,12 +8230,15 @@ function buildSarifDocument(tool, findings) {
 // src/sarif/sarif-store.ts
 var SarifStore = class {
   filePath;
+  /** Absolute workspace root, used to normalize URIs to a relative form. */
+  workspaceRoot;
   /** In-memory index of findings keyed by their dedup string. */
   findings = /* @__PURE__ */ new Map();
   /** Tool invocations we have already ingested, for telemetry. */
   toolInvocations = 0;
   constructor(options) {
-    const dir = isAbsolute2(options.outputDir) ? options.outputDir : resolve4(options.workspaceRoot, options.outputDir);
+    this.workspaceRoot = resolve5(options.workspaceRoot);
+    const dir = isAbsolute3(options.outputDir) ? options.outputDir : resolve5(this.workspaceRoot, options.outputDir);
     this.filePath = join4(dir, options.fileName ?? "latest.sarif");
   }
   /**
@@ -8251,7 +8287,11 @@ var SarifStore = class {
           }
           for (const result of run.results) {
             try {
-              const finding = hydrateFindingFromResult(result);
+              const finding = hydrateFindingFromResult(
+                result,
+                void 0,
+                this.workspaceRoot
+              );
               if (finding) this.findings.set(finding.dedupKey, finding);
             } catch (entryErr) {
               process.stderr.write(
@@ -8302,7 +8342,7 @@ var SarifStore = class {
     for (const run of sarifDocument.runs) {
       for (const result of run.results) {
         total += 1;
-        const finding = hydrateFindingFromResult(result, sourceTool);
+        const finding = hydrateFindingFromResult(result, sourceTool, this.workspaceRoot);
         if (!finding) continue;
         if (this.findings.has(finding.dedupKey)) {
           duplicates += 1;
@@ -8314,6 +8354,32 @@ var SarifStore = class {
       }
     }
     return { accepted, duplicates, total };
+  }
+  /**
+   * Evict every finding whose `sourceTool` matches the given identifier.
+   *
+   * Used by the auto-scan orchestrator immediately before it re-runs a
+   * scanner: if the scanner later returns zero findings, the store ends
+   * up clean instead of retaining the previous run's output. This is
+   * the fix for the "stale SARIF store" bug where `auto_scan` never
+   * evicted stale findings, so re-running a clean scanner did nothing.
+   *
+   * Safe to call when the store is empty. Returns the number of
+   * findings that were removed so callers can surface the count for
+   * telemetry.
+   *
+   * @param sourceTool The scanner identifier to evict.
+   * @returns          The number of findings removed.
+   */
+  clearSourceTool(sourceTool) {
+    let removed = 0;
+    for (const [key, finding] of this.findings) {
+      if (finding.sourceTool === sourceTool) {
+        this.findings.delete(key);
+        removed += 1;
+      }
+    }
+    return removed;
   }
   /**
    * Snapshot all currently tracked findings as a plain array. Mostly
@@ -8371,12 +8437,13 @@ var SarifStore = class {
     return this.toolInvocations;
   }
 };
-function hydrateFindingFromResult(result, sourceTool) {
+function hydrateFindingFromResult(result, sourceTool, workspaceRoot) {
   if (!result.ruleId || !result.message?.text) return null;
   const loc = result.locations?.[0]?.physicalLocation;
-  const uri = loc?.artifactLocation?.uri;
+  const rawUri = loc?.artifactLocation?.uri;
   const region = loc?.region;
-  if (!uri || region?.startLine === void 0 || region.startColumn === void 0) return null;
+  if (!rawUri || region?.startLine === void 0 || region.startColumn === void 0) return null;
+  const uri = normalizeSarifUri(rawUri, workspaceRoot);
   const resolvedSourceTool = sourceTool ?? (typeof result.properties?.sourceTool === "string" ? result.properties.sourceTool : "unknown");
   const level = result.level ?? "warning";
   const dedupKey = `${result.ruleId}|${uri}|${region.startLine}|${region.startColumn}`;
@@ -8395,6 +8462,22 @@ function hydrateFindingFromResult(result, sourceTool) {
     dedupKey,
     sourceTool: resolvedSourceTool
   };
+}
+function normalizeSarifUri(uri, workspaceRoot) {
+  let path = uri;
+  if (path.startsWith("file://")) {
+    try {
+      path = new URL(path).pathname;
+    } catch {
+    }
+  }
+  if (workspaceRoot && isAbsolute3(path)) {
+    const rel = relative3(workspaceRoot, path);
+    if (rel && !rel.startsWith("..")) {
+      path = rel;
+    }
+  }
+  return path.split("\\").join("/");
 }
 
 // src/sarif/sarif-validator.ts
@@ -8590,7 +8673,7 @@ function isStrictness(value) {
 
 // src/tools/test-harness.ts
 import { promises as fs6 } from "node:fs";
-import { basename, dirname as dirname4, extname, isAbsolute as isAbsolute3, join as join6, relative as relative2, resolve as resolve5, sep as sep2 } from "node:path";
+import { basename, dirname as dirname4, extname, isAbsolute as isAbsolute4, join as join6, relative as relative4, resolve as resolve6, sep as sep2 } from "node:path";
 var TEST_SUFFIX_PATTERN = /\.(test|spec)\./;
 function isTestFile(filePath) {
   const base = basename(filePath);
@@ -8600,12 +8683,12 @@ function isTestFile(filePath) {
   return parts.includes("__tests__") || parts.includes("tests") || parts.includes("test");
 }
 function candidatePaths(workspaceRoot, filePath) {
-  const absSource = resolve5(filePath);
+  const absSource = resolve6(filePath);
   const ext = extname(absSource);
   const base = basename(absSource, ext);
   const dir = dirname4(absSource);
-  const absWorkspace = resolve5(workspaceRoot);
-  const relFromRoot = relative2(absWorkspace, absSource);
+  const absWorkspace = resolve6(workspaceRoot);
+  const relFromRoot = relative4(absWorkspace, absSource);
   const relDir = dirname4(relFromRoot);
   const candidates = /* @__PURE__ */ new Set();
   candidates.add(join6(dir, `${base}.test${ext}`));
@@ -8637,7 +8720,7 @@ function candidatePaths(workspaceRoot, filePath) {
   return Array.from(candidates);
 }
 async function findTestFile(workspaceRoot, filePath) {
-  const absolute = isAbsolute3(filePath) ? filePath : resolve5(workspaceRoot, filePath);
+  const absolute = isAbsolute4(filePath) ? filePath : resolve6(workspaceRoot, filePath);
   if (isTestFile(absolute)) {
     return { testFile: absolute, candidates: [absolute], isTestFile: true };
   }
@@ -8658,7 +8741,7 @@ import { join as join11 } from "node:path";
 
 // src/scanner/detector.ts
 import { existsSync as existsSync2, readFileSync as readFileSync3, readdirSync } from "node:fs";
-import { join as join7, resolve as resolve6 } from "node:path";
+import { join as join7, resolve as resolve7 } from "node:path";
 import { execFile } from "node:child_process";
 var SCANNER_SIGNALS = {
   eslint: {
@@ -8750,9 +8833,9 @@ function probePackageJson(workspaceRoot, scanner) {
   }
 }
 function probeBinary(binaryName) {
-  return new Promise((resolve8) => {
+  return new Promise((resolve9) => {
     execFile("which", [binaryName], { timeout: 5e3 }, (err) => {
-      resolve8(err === null);
+      resolve9(err === null);
     });
   });
 }
@@ -8808,7 +8891,7 @@ async function detectMonorepoScanners(workspaceRoot) {
     if (Array.isArray(pkg.workspaces)) {
       for (const ws of pkg.workspaces) {
         if (typeof ws === "string" && !ws.includes("*")) {
-          const full = resolve6(workspaceRoot, ws);
+          const full = resolve7(workspaceRoot, ws);
           if (existsSync2(full)) subdirs.add(full);
         }
       }
@@ -8849,6 +8932,24 @@ async function detectMonorepoScanners(workspaceRoot) {
     }
   }
   return detections;
+}
+function mergeMonorepoDetections(root, mono) {
+  const seen = /* @__PURE__ */ new Set();
+  const merged = [];
+  const keyOf = (d) => `${d.scanner}\0${d.workingDir ?? "<root>"}`;
+  for (const r of root) {
+    const key = keyOf(r);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(r);
+  }
+  for (const m of mono) {
+    const key = keyOf(m);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(m);
+  }
+  return merged;
 }
 
 // src/scanner/runner.ts
@@ -8913,7 +9014,7 @@ function runScanner(scanner, workspaceRoot, options) {
   const start = Date.now();
   const cwd = options?.workingDir ?? workspaceRoot;
   const cmd = getScannerCommand(scanner, cwd);
-  return new Promise((resolve8) => {
+  return new Promise((resolve9) => {
     execFile2(
       cmd.command,
       cmd.args,
@@ -8932,7 +9033,7 @@ function runScanner(scanner, workspaceRoot, options) {
           if (cmd.outputFile && existsSync3(cmd.outputFile)) {
             try {
               const fileOutput = readFileSync4(cmd.outputFile, "utf-8");
-              resolve8({
+              resolve9({
                 scanner,
                 success: true,
                 rawOutput: fileOutput,
@@ -8942,7 +9043,7 @@ function runScanner(scanner, workspaceRoot, options) {
             } catch {
             }
           }
-          resolve8({
+          resolve9({
             scanner,
             success: false,
             rawOutput: "",
@@ -8955,7 +9056,7 @@ function runScanner(scanner, workspaceRoot, options) {
           if (existsSync3(cmd.outputFile)) {
             try {
               const fileOutput = readFileSync4(cmd.outputFile, "utf-8");
-              resolve8({
+              resolve9({
                 scanner,
                 success: true,
                 rawOutput: fileOutput,
@@ -8963,7 +9064,7 @@ function runScanner(scanner, workspaceRoot, options) {
               });
               return;
             } catch (readErr) {
-              resolve8({
+              resolve9({
                 scanner,
                 success: false,
                 rawOutput: "",
@@ -8973,7 +9074,7 @@ function runScanner(scanner, workspaceRoot, options) {
               return;
             }
           }
-          resolve8({
+          resolve9({
             scanner,
             success: false,
             rawOutput: "",
@@ -8984,7 +9085,7 @@ function runScanner(scanner, workspaceRoot, options) {
         }
         const output = stdout.trim();
         if (!output) {
-          resolve8({
+          resolve9({
             scanner,
             success: true,
             rawOutput: "[]",
@@ -8993,7 +9094,7 @@ function runScanner(scanner, workspaceRoot, options) {
           });
           return;
         }
-        resolve8({
+        resolve9({
           scanner,
           success: true,
           rawOutput: output,
@@ -9070,7 +9171,7 @@ export default [
 `;
 }
 function npmInstall(workspaceRoot, packages) {
-  return new Promise((resolve8) => {
+  return new Promise((resolve9) => {
     execFile3(
       "npm",
       ["install", "--save-dev", ...packages],
@@ -9081,14 +9182,14 @@ function npmInstall(workspaceRoot, packages) {
       },
       (err, stdout, stderr) => {
         if (err) {
-          resolve8({
+          resolve9({
             action: `npm install --save-dev ${packages.join(" ")}`,
             success: false,
             detail: stderr || err.message
           });
           return;
         }
-        resolve8({
+        resolve9({
           action: `npm install --save-dev ${packages.join(" ")}`,
           success: true,
           detail: `installed ${packages.join(", ")}`
@@ -9300,7 +9401,7 @@ function buildResult(projectType, steps, autoScanResult, recommendation) {
 
 // src/scanner/complexity-scanner.ts
 import { promises as fs7 } from "node:fs";
-import { join as join10, relative as relative3 } from "node:path";
+import { join as join10, relative as relative5 } from "node:path";
 var MAX_FILES = 2e4;
 var RULE_ID = "complexity/cyclomatic-max";
 var SOURCE_TOOL = "complexity";
@@ -9328,7 +9429,7 @@ async function scanComplexity(workspaceRoot, engine, sarifStore, config, logger2
       for (const fn of metrics.functions) {
         if (fn.cyclomaticComplexity <= threshold) continue;
         const level = fn.cyclomaticComplexity >= errorThreshold ? "error" : "warning";
-        const relPath = relative3(workspaceRoot, filePath);
+        const relPath = relative5(workspaceRoot, filePath);
         sarifResults.push({
           ruleId: RULE_ID,
           level,
@@ -9400,7 +9501,7 @@ async function collectSourceFiles(workspaceRoot, filter) {
       }
       if (!entry.isFile()) continue;
       if (!detectLanguageFromPath(entry.name)) continue;
-      const relPath = relative3(workspaceRoot, full);
+      const relPath = relative5(workspaceRoot, full);
       if (filter.shouldSkipFile(relPath, entry.name)) continue;
       files.push(full);
       if (files.length >= MAX_FILES) {
@@ -9427,14 +9528,9 @@ function ingestScannerRun(scanner, rawOutput, sarifStore) {
 }
 async function autoScan(workspaceRoot, sarifStore, logger2, options) {
   const start = Date.now();
-  const detected = await detectScanners(workspaceRoot);
+  const rootDetected = await detectScanners(workspaceRoot);
   const monorepoDetected = await detectMonorepoScanners(workspaceRoot);
-  const rootScannerSet = new Set(detected.filter((d) => d.available).map((d) => d.scanner));
-  for (const md of monorepoDetected) {
-    if (!rootScannerSet.has(md.scanner)) {
-      detected.push(md);
-    }
-  }
+  const detected = mergeMonorepoDetections(rootDetected, monorepoDetected);
   const available = detected.filter((d) => d.available);
   logger2.info(
     {
@@ -9493,12 +9589,24 @@ async function autoScan(workspaceRoot, sarifStore, logger2, options) {
       totalDurationMs: Date.now() - start
     };
   }
+  const scannersToRun = new Set(available.map((d) => d.scanner));
+  const evictionCounts = {};
+  for (const scanner of scannersToRun) {
+    const removed = sarifStore.clearSourceTool(scanner);
+    if (removed > 0) evictionCounts[scanner] = removed;
+  }
+  if (Object.keys(evictionCounts).length > 0) {
+    logger2.info(
+      { evicted: evictionCounts },
+      "auto-scan: cleared stale findings before re-running scanners"
+    );
+  }
   const runResults = await Promise.allSettled(
     available.map((d) => runScanner(d.scanner, workspaceRoot, d.workingDir ? { workingDir: d.workingDir } : void 0))
   );
   const results = [];
   let totalFindings = 0;
-  let persistNeeded = false;
+  let persistNeeded = Object.keys(evictionCounts).length > 0;
   for (let i = 0; i < available.length; i++) {
     const detection = available[i];
     const settled = runResults[i];
@@ -9570,6 +9678,13 @@ async function autoScan(workspaceRoot, sarifStore, logger2, options) {
   }
   let complexityScan;
   if (options?.engine) {
+    const evictedComplexity = sarifStore.clearSourceTool("complexity");
+    if (evictedComplexity > 0) {
+      logger2.info(
+        { evicted: evictedComplexity },
+        "auto-scan: cleared stale complexity findings before re-scan"
+      );
+    }
     try {
       complexityScan = await scanComplexity(
         workspaceRoot,
@@ -9579,6 +9694,9 @@ async function autoScan(workspaceRoot, sarifStore, logger2, options) {
         logger2
       );
       totalFindings += complexityScan.violations;
+      if (evictedComplexity > 0 && complexityScan.violations === 0) {
+        await sarifStore.persist();
+      }
     } catch (err) {
       logger2.warn(
         { err: err.message },
@@ -9598,7 +9716,7 @@ async function autoScan(workspaceRoot, sarifStore, logger2, options) {
 // src/monorepo/project-map.ts
 import { existsSync as existsSync6, readFileSync as readFileSync5, readdirSync as readdirSync3 } from "node:fs";
 import { promises as fs8 } from "node:fs";
-import { join as join12, basename as basename2, resolve as resolve7 } from "node:path";
+import { join as join12, basename as basename2, resolve as resolve8 } from "node:path";
 import { execFile as execFile4 } from "node:child_process";
 var MONOREPO_DIRS2 = ["apps", "packages", "libs", "modules", "services"];
 var SCANNER_FOR_TYPE = {
@@ -9618,9 +9736,9 @@ var BINARY_FOR_SCANNER = {
   dotnet_format: "dotnet"
 };
 function probeBinary2(binaryName) {
-  return new Promise((resolve8) => {
+  return new Promise((resolve9) => {
     execFile4("which", [binaryName], { timeout: 5e3 }, (err) => {
-      resolve8(err === null);
+      resolve9(err === null);
     });
   });
 }
@@ -9668,7 +9786,7 @@ function expandWorkspacePattern(workspaceRoot, pattern) {
       return [];
     }
   }
-  const full = resolve7(workspaceRoot, pattern);
+  const full = resolve8(workspaceRoot, pattern);
   try {
     const entries = readdirSync3(full, { withFileTypes: true });
     void entries;
@@ -9695,7 +9813,7 @@ function collectSubdirectories(workspaceRoot, extraDirs) {
   }
   if (extraDirs && extraDirs.length > 0) {
     for (const dir of extraDirs) {
-      const absDir = resolve7(workspaceRoot, dir);
+      const absDir = resolve8(workspaceRoot, dir);
       if (!existsSync6(absDir)) continue;
       const hasMarker = PROJECT_MARKERS.some((m) => existsSync6(join12(absDir, m)));
       if (hasMarker) {
@@ -10191,11 +10309,13 @@ async function main() {
     const typed = args;
     const format = typed.format ?? "both";
     let scoreRoot = config.pluginRoot;
+    let filterPathPrefix;
     if (typed.scope && projectMap) {
       const project = projectMap.projects.find((p) => p.name === typed.scope);
       if (project) {
         const { join: join13 } = await import("node:path");
         scoreRoot = join13(config.pluginRoot, project.path);
+        filterPathPrefix = project.path.replace(/\\/g, "/").replace(/\/+$/, "");
       }
     }
     try {
@@ -10207,7 +10327,9 @@ async function main() {
         workspace: { physicalLoc: workspace.physicalLoc, fileCount: workspace.fileCount },
         sarifStore,
         dashboardUrl: dashboard?.url ?? null,
-        sarifReportPath: sarifStore.consolidatedReportPath
+        sarifReportPath: sarifStore.consolidatedReportPath,
+        ...filterPathPrefix !== void 0 ? { filterPathPrefix } : {},
+        scopeWorkspaceRoot: config.pluginRoot
       });
       const blocks = [];
       if (format === "markdown" || format === "both") blocks.push({ type: "text", text: renderProjectScoreMarkdown(score) });

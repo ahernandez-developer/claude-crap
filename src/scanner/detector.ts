@@ -329,5 +329,55 @@ export async function detectMonorepoScanners(
   return detections;
 }
 
+// ── Monorepo merge ─────────────────────────────────────────────────
+
+/**
+ * Merge root-level scanner detections with monorepo sub-project
+ * detections, preserving every sub-project scanner invocation even
+ * when it shares a scanner name with the root.
+ *
+ * This is the fix for the monorepo-user bug where a root-level ESLint
+ * config shadowed every `apps/*` ESLint config, so the sub-projects
+ * never got scanned. The previous implementation deduped by scanner
+ * name (`Set<scanner>`), which is wrong for polyglot monorepos where
+ * the same linter runs from multiple working directories.
+ *
+ * Dedup key: `(scanner, workingDir ?? "<root>")`. Two detections with
+ * the same scanner AND the same working dir still collapse to one,
+ * which matters when `detectScanners` and `detectMonorepoScanners`
+ * both discover the same top-level config.
+ *
+ * The returned array starts with the root detections (unchanged order)
+ * followed by every monorepo detection that did not already appear.
+ *
+ * @param root Root-level detections from {@link detectScanners}.
+ * @param mono Sub-project detections from {@link detectMonorepoScanners}.
+ * @returns    Merged list with duplicates collapsed.
+ */
+export function mergeMonorepoDetections(
+  root: ReadonlyArray<ScannerDetection>,
+  mono: ReadonlyArray<ScannerDetection>,
+): ScannerDetection[] {
+  const seen = new Set<string>();
+  const merged: ScannerDetection[] = [];
+
+  const keyOf = (d: ScannerDetection): string =>
+    `${d.scanner}\u0000${d.workingDir ?? "<root>"}`;
+
+  for (const r of root) {
+    const key = keyOf(r);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(r);
+  }
+  for (const m of mono) {
+    const key = keyOf(m);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(m);
+  }
+  return merged;
+}
+
 // Exported for testing
 export { SCANNER_SIGNALS, MONOREPO_DIRS };

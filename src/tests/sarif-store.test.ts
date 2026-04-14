@@ -215,6 +215,126 @@ describe("SarifStore", () => {
     assert.equal(survivor?.ruleId, "GOOD-001");
   });
 
+  describe("URI normalization (relative vs absolute)", () => {
+    // Pins the monorepo-user bug where the same file showed up in
+    // `byFile` twice — once as `apps/api/X.cs` from the complexity
+    // scanner and once as `/Users/.../apps/api/X.cs` from ESLint /
+    // dotnet_format adapters. The fix normalizes every URI to a
+    // workspace-relative path at ingest time, so the store carries a
+    // single canonical form.
+
+    it("normalizes absolute URIs to workspace-relative on ingest", async () => {
+      const store = new SarifStore({ workspaceRoot: workspace, outputDir: "norm-a" });
+      await store.loadLatest();
+      const abs = join(workspace, "apps/api/Controllers/X.cs");
+      store.ingestRun(
+        makeSarif({ ruleId: "R1", uri: abs, line: 10, column: 5 }),
+        "dotnet_format",
+      );
+      const [finding] = store.list();
+      assert.equal(finding?.location.uri, "apps/api/Controllers/X.cs");
+    });
+
+    it("dedupes when the same location arrives as both relative and absolute", async () => {
+      const store = new SarifStore({ workspaceRoot: workspace, outputDir: "norm-b" });
+      await store.loadLatest();
+      const abs = join(workspace, "src/foo.ts");
+      store.ingestRun(
+        makeSarif({ ruleId: "R-same", uri: "src/foo.ts", line: 1, column: 1 }),
+        "complexity",
+      );
+      store.ingestRun(
+        makeSarif({ ruleId: "R-same", uri: abs, line: 1, column: 1 }),
+        "eslint",
+      );
+      assert.equal(store.size(), 1, "relative and absolute URIs must collapse to one");
+    });
+
+    it("leaves already-relative URIs untouched", async () => {
+      const store = new SarifStore({ workspaceRoot: workspace, outputDir: "norm-c" });
+      await store.loadLatest();
+      store.ingestRun(
+        makeSarif({ ruleId: "R2", uri: "apps/mobile/lib/main.dart", line: 3, column: 2 }),
+        "dart_analyze",
+      );
+      const [finding] = store.list();
+      assert.equal(finding?.location.uri, "apps/mobile/lib/main.dart");
+    });
+
+    it("preserves absolute URIs that sit OUTSIDE the workspace", async () => {
+      // A file scanned from a symlink or an absolute path that resolves
+      // above the workspace must not be silently reparented. The store
+      // should keep the absolute form so findings remain traceable.
+      const store = new SarifStore({ workspaceRoot: workspace, outputDir: "norm-d" });
+      await store.loadLatest();
+      store.ingestRun(
+        makeSarif({ ruleId: "R3", uri: "/etc/hosts", line: 1, column: 1 }),
+        "semgrep",
+      );
+      const [finding] = store.list();
+      assert.equal(finding?.location.uri, "/etc/hosts");
+    });
+  });
+
+  describe("clearSourceTool (stale-finding eviction)", () => {
+    // Pins the monorepo-user bug where re-running `auto_scan` never
+    // evicted the stale findings from the prior run — so even after
+    // `dotnet_format` returned zero findings, the 138 warnings from
+    // the earlier scan kept polluting the project score.
+
+    it("removes every finding produced by the given source tool", async () => {
+      const store = new SarifStore({ workspaceRoot: workspace, outputDir: "evict-a" });
+      await store.loadLatest();
+      store.ingestRun(
+        makeSarif({ ruleId: "R1", uri: "src/a.cs", line: 1, column: 1 }),
+        "dotnet_format",
+      );
+      store.ingestRun(
+        makeSarif({ ruleId: "R2", uri: "src/b.cs", line: 2, column: 1 }),
+        "dotnet_format",
+      );
+      store.ingestRun(
+        makeSarif({ ruleId: "R3", uri: "src/c.ts", line: 1, column: 1 }),
+        "eslint",
+      );
+      assert.equal(store.size(), 3);
+      const evicted = store.clearSourceTool("dotnet_format");
+      assert.equal(evicted, 2);
+      assert.equal(store.size(), 1);
+      const [survivor] = store.list();
+      assert.equal(survivor?.sourceTool, "eslint");
+    });
+
+    it("returns zero when no findings match the source tool", async () => {
+      const store = new SarifStore({ workspaceRoot: workspace, outputDir: "evict-b" });
+      await store.loadLatest();
+      store.ingestRun(
+        makeSarif({ ruleId: "R1", uri: "src/a.ts", line: 1, column: 1 }),
+        "eslint",
+      );
+      const evicted = store.clearSourceTool("semgrep");
+      assert.equal(evicted, 0);
+      assert.equal(store.size(), 1);
+    });
+
+    it("lets a subsequent empty ingest produce a truly empty view", async () => {
+      // The end-to-end flow that auto_scan relies on: clear, then ingest.
+      const store = new SarifStore({ workspaceRoot: workspace, outputDir: "evict-c" });
+      await store.loadLatest();
+      store.ingestRun(
+        makeSarif({ ruleId: "R-old", uri: "src/x.ts", line: 1, column: 1 }),
+        "eslint",
+      );
+      store.clearSourceTool("eslint");
+      // An ingest that returns no findings should leave the store empty.
+      store.ingestRun(
+        { version: "2.1.0", runs: [{ tool: { driver: { name: "eslint", version: "0" } }, results: [] }] },
+        "eslint",
+      );
+      assert.equal(store.size(), 0);
+    });
+  });
+
   it("F-A08-01: loadLatest survives a top-level runs field that is not an array", async () => {
     // If `runs` is serialized as an object instead of an array (a
     // tampered file, or a mis-generated report), the outer

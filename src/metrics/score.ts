@@ -34,8 +34,10 @@
  * @module metrics/score
  */
 
+import { isAbsolute, relative, resolve } from "node:path";
+
 import type { MaintainabilityRating } from "../config.js";
-import type { SarifStore } from "../sarif/sarif-store.js";
+import type { IngestedFinding, SarifStore } from "../sarif/sarif-store.js";
 import { classifyTdr, ratingIsWorseThan } from "./tdr.js";
 
 /**
@@ -131,6 +133,23 @@ export interface ComputeProjectScoreInput {
   readonly sarifStore: SarifStore;
   readonly dashboardUrl: string | null;
   readonly sarifReportPath: string;
+  /**
+   * Optional workspace-relative path prefix. When set, only findings
+   * whose URI sits under this prefix are included in every aggregation
+   * (total counts, byFile, byTool, reliability, security, TDR). Used by
+   * `score_project --scope <project>` so a per-sub-project reading
+   * reflects reality instead of pulling in the whole workspace's
+   * findings. The prefix is matched against SARIF URIs after the store
+   * has already normalized them to workspace-relative form; absolute
+   * paths and `file://` URIs are normalized here as a safety net.
+   */
+  readonly filterPathPrefix?: string;
+  /**
+   * Absolute path to the original workspace root when
+   * {@link filterPathPrefix} may contain absolute paths that need to
+   * be normalized. Defaults to {@link workspaceRoot}.
+   */
+  readonly scopeWorkspaceRoot?: string;
 }
 
 /**
@@ -149,7 +168,11 @@ const SECURITY_RULE_PATTERN =
  * @returns     A {@link ProjectScore} ready to be serialized.
  */
 export function computeProjectScore(input: ComputeProjectScoreInput): ProjectScore {
-  const findingsList = input.sarifStore.list();
+  const findingsList = filterFindingsByPrefix(
+    input.sarifStore.list(),
+    input.filterPathPrefix,
+    input.scopeWorkspaceRoot ?? input.workspaceRoot,
+  );
 
   // ---- Findings summary ----
   /** @type {Record<string, number>} */
@@ -234,6 +257,66 @@ export function computeProjectScore(input: ComputeProjectScoreInput): ProjectSco
       sarifReportPath: input.sarifReportPath,
     },
   };
+}
+
+/**
+ * Filter an in-memory list of {@link IngestedFinding} records so only
+ * those that live underneath `prefix` survive. Used by
+ * {@link computeProjectScore} when a caller passes `filterPathPrefix`
+ * (set by `score_project --scope <project>`).
+ *
+ * The SARIF store already normalizes URIs to workspace-relative form
+ * on ingest, but this helper re-normalizes defensively so legacy
+ * reports written before that fix, or findings produced by a third
+ * party, still filter correctly. The comparison is anchored on
+ * directory boundaries (`apps/mob` never matches `apps/mobile-web`).
+ *
+ * An empty / undefined prefix returns the list unchanged so the
+ * whole-workspace score path stays zero-cost.
+ *
+ * @param findings      Full finding list from the SARIF store.
+ * @param prefix        Optional workspace-relative path prefix.
+ * @param workspaceRoot Absolute workspace root used to normalize any
+ *                      absolute URIs stored in legacy reports.
+ * @returns             Filtered list (same reference when prefix empty).
+ */
+function filterFindingsByPrefix(
+  findings: ReadonlyArray<IngestedFinding>,
+  prefix: string | undefined,
+  workspaceRoot: string,
+): ReadonlyArray<IngestedFinding> {
+  if (!prefix) return findings;
+  const normalizedPrefix = prefix.replace(/\\/g, "/").replace(/\/+$/, "");
+  if (!normalizedPrefix) return findings;
+  const root = resolve(workspaceRoot);
+  return findings.filter((f) => {
+    const uri = relativizeForMatch(f.location.uri, root);
+    return uri === normalizedPrefix || uri.startsWith(`${normalizedPrefix}/`);
+  });
+}
+
+/**
+ * Rewrite a SARIF URI to a POSIX-style workspace-relative path for
+ * prefix matching. Mirrors `normalizeSarifUri` in the SARIF store but
+ * is intentionally duplicated here so the score engine stays pure and
+ * has no circular dependency on the store internals.
+ */
+function relativizeForMatch(uri: string, workspaceRoot: string): string {
+  let path = uri;
+  if (path.startsWith("file://")) {
+    try {
+      path = new URL(path).pathname;
+    } catch {
+      // Leave the raw string alone on malformed URLs.
+    }
+  }
+  if (isAbsolute(path)) {
+    const rel = relative(workspaceRoot, path);
+    if (rel && !rel.startsWith("..")) {
+      path = rel;
+    }
+  }
+  return path.replace(/\\/g, "/");
 }
 
 /**

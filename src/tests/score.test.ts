@@ -218,6 +218,119 @@ describe("computeProjectScore", () => {
     assert.equal(s.location.dashboardUrl, "http://127.0.0.1:5117");
     assert.ok(s.location.sarifReportPath.endsWith("latest.sarif"));
   });
+
+  describe("scope filtering (filterPathPrefix)", () => {
+    // These tests pin the bug reported by the monorepo user:
+    //   `score_project --scope mobile` was narrowing the LOC denominator
+    //   but not the finding set, so apps/api findings were polluting the
+    //   mobile project rating. The fix adds a `filterPathPrefix` option
+    //   to computeProjectScore; when present, findings whose URI does
+    //   not sit under that prefix are excluded from EVERY aggregation
+    //   (total counts, byFile, byTool, reliability, security, TDR).
+
+    it("excludes findings outside the prefix from every count", async () => {
+      const store = await buildStore(workspace, [
+        makeSarif({ ruleId: "rule.a", uri: "apps/mobile/lib/a.dart", line: 1 }),
+        makeSarif({ ruleId: "rule.b", uri: "apps/mobile/lib/b.dart", line: 2 }),
+        makeSarif({ ruleId: "rule.c", uri: "apps/api/Controllers/C.cs", line: 1 }),
+        makeSarif({ ruleId: "rule.d", uri: "apps/api/Controllers/D.cs", line: 2 }),
+      ]);
+      const s = computeProjectScore({
+        workspaceRoot: workspace,
+        minutesPerLoc: 30,
+        tdrMaxRating: "C",
+        workspace: { physicalLoc: 1000, fileCount: 10 },
+        sarifStore: store,
+        dashboardUrl: null,
+        sarifReportPath: store.consolidatedReportPath,
+        filterPathPrefix: "apps/mobile",
+      });
+      assert.equal(s.findings.total, 2, "mobile prefix keeps only mobile findings");
+      assert.deepEqual(Object.keys(s.findings.byFile).sort(), [
+        "apps/mobile/lib/a.dart",
+        "apps/mobile/lib/b.dart",
+      ]);
+      assert.equal(s.reliability.findings, 2);
+    });
+
+    it("does not leak other-project findings into TDR remediation", async () => {
+      // The bug: mobile's remediation was inflated by apps/api effort.
+      const store = await buildStore(workspace, [
+        makeSarif({
+          ruleId: "rule.heavy",
+          uri: "apps/api/huge.cs",
+          line: 1,
+          effortMinutes: 9999,
+        }),
+        makeSarif({
+          ruleId: "rule.light",
+          uri: "apps/mobile/tiny.dart",
+          line: 1,
+          effortMinutes: 5,
+        }),
+      ]);
+      const s = computeProjectScore({
+        workspaceRoot: workspace,
+        minutesPerLoc: 30,
+        tdrMaxRating: "C",
+        workspace: { physicalLoc: 1000, fileCount: 10 },
+        sarifStore: store,
+        dashboardUrl: null,
+        sarifReportPath: store.consolidatedReportPath,
+        filterPathPrefix: "apps/mobile",
+      });
+      assert.equal(s.maintainability.remediationMinutes, 5);
+    });
+
+    it("treats an absent prefix as whole workspace (backwards compatible)", async () => {
+      const store = await buildStore(workspace, [
+        makeSarif({ ruleId: "rule.a", uri: "apps/api/X.cs", line: 1 }),
+        makeSarif({ ruleId: "rule.b", uri: "apps/mobile/Y.dart", line: 1 }),
+      ]);
+      const s = score(store, workspace);
+      assert.equal(s.findings.total, 2);
+    });
+
+    it("normalizes absolute paths when comparing against the prefix", async () => {
+      // The SARIF store may hold absolute URIs from scanners that emit
+      // them (ESLint, dotnet_format). The filter must still match after
+      // normalization against the workspace root.
+      const abs = join(workspace, "apps/mobile/deep/x.dart");
+      const store = await buildStore(workspace, [
+        makeSarif({ ruleId: "rule.a", uri: abs, line: 1 }),
+      ]);
+      const s = computeProjectScore({
+        workspaceRoot: workspace,
+        minutesPerLoc: 30,
+        tdrMaxRating: "C",
+        workspace: { physicalLoc: 1000, fileCount: 10 },
+        sarifStore: store,
+        dashboardUrl: null,
+        sarifReportPath: store.consolidatedReportPath,
+        filterPathPrefix: "apps/mobile",
+      });
+      assert.equal(s.findings.total, 1);
+    });
+
+    it("does not match partial directory names (apps/mob != apps/mobile)", async () => {
+      const store = await buildStore(workspace, [
+        makeSarif({ ruleId: "rule.a", uri: "apps/mobile-web/x.ts", line: 1 }),
+        makeSarif({ ruleId: "rule.b", uri: "apps/mobile/x.dart", line: 2 }),
+      ]);
+      const s = computeProjectScore({
+        workspaceRoot: workspace,
+        minutesPerLoc: 30,
+        tdrMaxRating: "C",
+        workspace: { physicalLoc: 1000, fileCount: 10 },
+        sarifStore: store,
+        dashboardUrl: null,
+        sarifReportPath: store.consolidatedReportPath,
+        filterPathPrefix: "apps/mobile",
+      });
+      assert.equal(s.findings.total, 1);
+      assert.equal(Object.keys(s.findings.byFile)[0], "apps/mobile/x.dart");
+    });
+  });
 });
 
 describe("renderProjectScoreMarkdown", () => {
