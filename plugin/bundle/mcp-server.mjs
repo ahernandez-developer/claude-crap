@@ -7376,7 +7376,10 @@ function parseRating(raw, fallback) {
 }
 function loadConfig() {
   return {
-    pluginRoot: process.env.CLAUDE_CRAP_PLUGIN_ROOT ?? process.cwd(),
+    // CLAUDE_PROJECT_DIR is set by Claude Code to the user's workspace.
+    // process.cwd() is NOT reliable — Claude Code sets it to the plugin
+    // cache directory when starting MCP servers, not the user's project.
+    pluginRoot: process.env.CLAUDE_PROJECT_DIR ?? process.env.CLAUDE_CRAP_PLUGIN_ROOT ?? process.cwd(),
     sarifOutputDir: process.env.CLAUDE_CRAP_SARIF_OUTPUT_DIR ?? ".claude-crap/reports",
     crapThreshold: parseNumber("CLAUDE_CRAP_CRAP_THRESHOLD", process.env.CLAUDE_CRAP_CRAP_THRESHOLD, 30),
     cyclomaticMax: parseNumber("CLAUDE_CRAP_CYCLOMATIC_MAX", process.env.CLAUDE_CRAP_CYCLOMATIC_MAX, 15),
