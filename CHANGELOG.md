@@ -5,42 +5,56 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.4.3] - 2026-04-13
+## [0.4.4] - 2026-04-13
 
 ### Fixed
 
-- **MCP server workspace root resolution** — `score_project`, `auto_scan`,
-  and every other MCP tool now reliably resolve the user's workspace
-  instead of writing reports into the plugin cache directory.
-  - The 0.3.6-and-earlier code only checked `CLAUDE_CRAP_PLUGIN_ROOT`
-    and `process.cwd()`. Claude Code spawns MCP servers with `cwd` set
-    to the plugin cache (`~/.claude/plugins/cache/herz/claude-crap/<v>/`),
-    so SARIF reports landed in the cache instead of the project.
-  - `loadConfig()` now delegates to `discoverWorkspaceRoot()`, which
-    walks a 4-strategy chain: `CLAUDE_PROJECT_DIR` → `CLAUDE_CRAP_PLUGIN_ROOT`
-    → parent process cwd (via `lsof` on macOS, `/proc/<pid>/cwd` on
-    Linux) → `process.cwd()`.
+- **MCP server workspace root resolution (follow-up to 0.4.3)** —
+  v0.4.3 attempted to fix the workspace-cache bug by setting
+  `"CLAUDE_PROJECT_DIR": "${CLAUDE_PROJECT_DIR}"` in `plugin/.mcp.json`
+  env, on the assumption that Claude Code would expand the variable.
+  It does not — only `${CLAUDE_PLUGIN_ROOT}` is expanded inside
+  `.mcp.json`. The literal string `${CLAUDE_PROJECT_DIR}` was passed
+  through to `process.env.CLAUDE_PROJECT_DIR`, the MCP server happily
+  used it as a path, and `auto_scan` returned 0 files because the
+  "workspace" was a literal template string. This release fixes that:
+  - **Reverted** the broken `.mcp.json` env entry.
   - **Defensive `${...}` literal detection.** Any env var whose value
-    matches `^${VAR_NAME}$` is treated as unset, so an unexpanded
-    `.mcp.json` template never leaks through as a "valid" path. This
-    catches a bug in the v0.4.3-rc.1 fix that set
-    `"CLAUDE_PROJECT_DIR": "${CLAUDE_PROJECT_DIR}"` in `.mcp.json` env,
-    which Claude Code does not expand (only `${CLAUDE_PLUGIN_ROOT}` is
-    expanded in `.mcp.json`).
-- **Stale plugin-cache version sync** — `npm run build:plugin` continues
-  to sync the freshly built bundle into every `~/.claude/plugins/cache/`
-  version, so users on stale cached versions (0.3.6, 0.4.0, etc.) pick
-  up the workspace fix without a manual reinstall.
+    matches `^${VAR_NAME}$` is treated as unset by `sanitizeEnvPath()`,
+    so an unexpanded template can never leak through as a "valid" path.
+  - **Parent-cwd fallback.** `loadConfig()` now delegates to
+    `discoverWorkspaceRoot()`, which walks a 4-strategy chain:
+    `CLAUDE_PROJECT_DIR` → `CLAUDE_CRAP_PLUGIN_ROOT` → parent process
+    cwd (via `lsof` on macOS, `/proc/<pid>/cwd` on Linux) →
+    `process.cwd()`. Claude Code's cwd IS the user's workspace, so the
+    parent-cwd probe is the most reliable fallback when env-var
+    inheritance is unavailable.
 
 ### Added
 
 - **`discoverWorkspaceRoot(options)`** export from `src/config.ts` with
   an injectable `readParentCwd` for testability.
-- **27 characterization tests** for `loadConfig` and
-  `discoverWorkspaceRoot` covering env priority, defaults, numeric and
-  rating parsing, literal `${...}` detection on every source, parent-cwd
+- **11 new characterization tests** in `src/tests/config.test.ts`
+  covering literal `${...}` detection on every source, parent-cwd
   fallback ordering, and the `process.cwd()` last-resort. Suite total:
-  366 tests, 95 suites.
+  **366 tests across 95 suites**.
+
+## [0.4.3] - 2026-04-13
+
+### Fixed
+
+- **MCP server workspace root (incomplete fix)** — `loadConfig()` now
+  reads `CLAUDE_PROJECT_DIR` ahead of `CLAUDE_CRAP_PLUGIN_ROOT` and
+  `process.cwd()`, so SARIF reports stop landing inside the plugin
+  cache directory.
+- **`.mcp.json` env pass-through** — added an explicit
+  `"CLAUDE_PROJECT_DIR": "${CLAUDE_PROJECT_DIR}"` entry to forward the
+  variable to the MCP server process.
+  > **Known issue (fixed in 0.4.4):** Claude Code does NOT expand
+  > `${CLAUDE_PROJECT_DIR}` inside `.mcp.json` env (only
+  > `${CLAUDE_PLUGIN_ROOT}` is expanded), so the literal template
+  > string was passed through and broke workspace resolution
+  > completely. Upgrade to 0.4.4.
 
 ## [0.4.2] - 2026-04-13
 
