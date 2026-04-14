@@ -22,7 +22,12 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { Logger } from "pino";
-import { detectScanners, detectMonorepoScanners, type ScannerDetection } from "./detector.js";
+import {
+  detectScanners,
+  detectMonorepoScanners,
+  mergeMonorepoDetections,
+  type ScannerDetection,
+} from "./detector.js";
 import { runScanner, type ScannerRunResult } from "./runner.js";
 import { bootstrapScanner } from "./bootstrap.js";
 import { scanComplexity, type ComplexityScanResult } from "./complexity-scanner.js";
@@ -101,17 +106,14 @@ export async function autoScan(
 ): Promise<AutoScanResult> {
   const start = Date.now();
 
-  // 1. Detect available scanners (root + monorepo subdirs)
-  const detected = await detectScanners(workspaceRoot);
+  // 1. Detect available scanners (root + monorepo subdirs).
+  //    mergeMonorepoDetections preserves every (scanner, workingDir)
+  //    pair so a root ESLint config does NOT shadow an apps/app or
+  //    apps/www ESLint config — each sub-project gets its own
+  //    invocation in a polyglot monorepo.
+  const rootDetected = await detectScanners(workspaceRoot);
   const monorepoDetected = await detectMonorepoScanners(workspaceRoot);
-
-  // Merge monorepo detections — skip duplicates (same scanner already found at root)
-  const rootScannerSet = new Set(detected.filter((d) => d.available).map((d) => d.scanner));
-  for (const md of monorepoDetected) {
-    if (!rootScannerSet.has(md.scanner)) {
-      detected.push(md);
-    }
-  }
+  const detected = mergeMonorepoDetections(rootDetected, monorepoDetected);
 
   const available = detected.filter((d) => d.available);
 
@@ -173,15 +175,38 @@ export async function autoScan(
     };
   }
 
-  // 2. Run all available scanners in parallel (each from its detected workingDir)
+  // 2. Evict stale findings from the SARIF store for every scanner we
+  //    are about to re-run. Without this step, a scanner that returned
+  //    `[A, B, C]` on the previous run and `[A]` on the current run
+  //    would leave B and C stuck in the store forever — the original
+  //    "stale SARIF store" bug. Eviction is scoped per scanner name
+  //    so a broken run of ESLint never wipes Semgrep findings.
+  const scannersToRun = new Set(available.map((d) => d.scanner));
+  const evictionCounts: Record<string, number> = {};
+  for (const scanner of scannersToRun) {
+    const removed = sarifStore.clearSourceTool(scanner);
+    if (removed > 0) evictionCounts[scanner] = removed;
+  }
+  if (Object.keys(evictionCounts).length > 0) {
+    logger.info(
+      { evicted: evictionCounts },
+      "auto-scan: cleared stale findings before re-running scanners",
+    );
+  }
+
+  // 3. Run all available scanners in parallel (each from its detected workingDir)
   const runResults = await Promise.allSettled(
     available.map((d) => runScanner(d.scanner, workspaceRoot, d.workingDir ? { workingDir: d.workingDir } : undefined)),
   );
 
-  // 3. Ingest results
+  // 4. Ingest results.
+  //    `persistNeeded` used to gate the final persist() on whether any
+  //    scanner produced findings. After the eviction fix we must also
+  //    persist when findings were *removed* but no new ones arrived —
+  //    otherwise the stale view survives on disk.
   const results: ScannerResult[] = [];
   let totalFindings = 0;
-  let persistNeeded = false;
+  let persistNeeded = Object.keys(evictionCounts).length > 0;
 
   for (let i = 0; i < available.length; i++) {
     const detection = available[i]!;
@@ -257,14 +282,24 @@ export async function autoScan(
     }
   }
 
-  // 4. Persist consolidated SARIF if anything was ingested
+  // 5. Persist consolidated SARIF if anything was ingested or evicted.
   if (persistNeeded) {
     await sarifStore.persist();
   }
 
-  // 5. Run built-in cyclomatic complexity scanner
+  // 6. Run built-in cyclomatic complexity scanner.
+  //    Same eviction invariant as external scanners: a function whose
+  //    complexity drops below threshold between runs should NOT leave
+  //    a stale finding in the store.
   let complexityScan: ComplexityScanResult | undefined;
   if (options?.engine) {
+    const evictedComplexity = sarifStore.clearSourceTool("complexity");
+    if (evictedComplexity > 0) {
+      logger.info(
+        { evicted: evictedComplexity },
+        "auto-scan: cleared stale complexity findings before re-scan",
+      );
+    }
     try {
       complexityScan = await scanComplexity(
         workspaceRoot,
@@ -274,6 +309,12 @@ export async function autoScan(
         logger,
       );
       totalFindings += complexityScan.violations;
+      // scanComplexity only persists when it produced findings of its
+      // own. If the eviction above actually removed stale findings and
+      // the fresh scan produced none, persist the cleared view here.
+      if (evictedComplexity > 0 && complexityScan.violations === 0) {
+        await sarifStore.persist();
+      }
     } catch (err) {
       logger.warn(
         { err: (err as Error).message },

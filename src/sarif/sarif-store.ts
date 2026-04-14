@@ -26,7 +26,7 @@
  */
 
 import { promises as fs } from "node:fs";
-import { dirname, isAbsolute, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 
 import { buildSarifDocument, type SarifFinding, type SarifLevel } from "./sarif-builder.js";
 
@@ -102,15 +102,18 @@ export interface IngestedFinding extends SarifFinding {
  */
 export class SarifStore {
   private readonly filePath: string;
+  /** Absolute workspace root, used to normalize URIs to a relative form. */
+  private readonly workspaceRoot: string;
   /** In-memory index of findings keyed by their dedup string. */
   private readonly findings = new Map<string, IngestedFinding>();
   /** Tool invocations we have already ingested, for telemetry. */
   private toolInvocations = 0;
 
   constructor(options: SarifStoreOptions) {
+    this.workspaceRoot = resolve(options.workspaceRoot);
     const dir = isAbsolute(options.outputDir)
       ? options.outputDir
-      : resolve(options.workspaceRoot, options.outputDir);
+      : resolve(this.workspaceRoot, options.outputDir);
     this.filePath = join(dir, options.fileName ?? "latest.sarif");
   }
 
@@ -161,7 +164,11 @@ export class SarifStore {
           }
           for (const result of run.results) {
             try {
-              const finding = hydrateFindingFromResult(result);
+              const finding = hydrateFindingFromResult(
+                result,
+                undefined,
+                this.workspaceRoot,
+              );
               if (finding) this.findings.set(finding.dedupKey, finding);
             } catch (entryErr) {
               process.stderr.write(
@@ -217,7 +224,7 @@ export class SarifStore {
     for (const run of sarifDocument.runs) {
       for (const result of run.results) {
         total += 1;
-        const finding = hydrateFindingFromResult(result, sourceTool);
+        const finding = hydrateFindingFromResult(result, sourceTool, this.workspaceRoot);
         if (!finding) continue;
         if (this.findings.has(finding.dedupKey)) {
           duplicates += 1;
@@ -232,6 +239,33 @@ export class SarifStore {
     }
 
     return { accepted, duplicates, total };
+  }
+
+  /**
+   * Evict every finding whose `sourceTool` matches the given identifier.
+   *
+   * Used by the auto-scan orchestrator immediately before it re-runs a
+   * scanner: if the scanner later returns zero findings, the store ends
+   * up clean instead of retaining the previous run's output. This is
+   * the fix for the "stale SARIF store" bug where `auto_scan` never
+   * evicted stale findings, so re-running a clean scanner did nothing.
+   *
+   * Safe to call when the store is empty. Returns the number of
+   * findings that were removed so callers can surface the count for
+   * telemetry.
+   *
+   * @param sourceTool The scanner identifier to evict.
+   * @returns          The number of findings removed.
+   */
+  clearSourceTool(sourceTool: string): number {
+    let removed = 0;
+    for (const [key, finding] of this.findings) {
+      if (finding.sourceTool === sourceTool) {
+        this.findings.delete(key);
+        removed += 1;
+      }
+    }
+    return removed;
   }
 
   /**
@@ -305,21 +339,33 @@ export class SarifStore {
  * or physical location), since a finding without coordinates cannot be
  * deduplicated and is therefore useless.
  *
- * @param result     Raw SARIF `result` object from the scanner's document.
- * @param sourceTool Optional scanner identifier. If omitted, we read it
- *                   from `result.properties.sourceTool` (used when
- *                   reloading a persisted report).
- * @returns          The hydrated finding, or `null` when invalid.
+ * When `workspaceRoot` is supplied, absolute URIs that sit underneath
+ * it are rewritten to a POSIX-style workspace-relative form. This is
+ * the fix for the "path normalization" bug where the same source file
+ * showed up in `byFile` twice — once as `apps/api/X.cs` from the
+ * complexity scanner and once as `/abs/apps/api/X.cs` from ESLint or
+ * dotnet_format. Absolute URIs outside the workspace are preserved as
+ * a safety valve for symlinked files and cross-repo scans.
+ *
+ * @param result        Raw SARIF `result` object from the scanner's document.
+ * @param sourceTool    Optional scanner identifier. If omitted, we read it
+ *                      from `result.properties.sourceTool` (used when
+ *                      reloading a persisted report).
+ * @param workspaceRoot Absolute workspace root used to normalize URIs.
+ * @returns             The hydrated finding, or `null` when invalid.
  */
 function hydrateFindingFromResult(
   result: SarifResult,
   sourceTool?: string,
+  workspaceRoot?: string,
 ): IngestedFinding | null {
   if (!result.ruleId || !result.message?.text) return null;
   const loc = result.locations?.[0]?.physicalLocation;
-  const uri = loc?.artifactLocation?.uri;
+  const rawUri = loc?.artifactLocation?.uri;
   const region = loc?.region;
-  if (!uri || region?.startLine === undefined || region.startColumn === undefined) return null;
+  if (!rawUri || region?.startLine === undefined || region.startColumn === undefined) return null;
+
+  const uri = normalizeSarifUri(rawUri, workspaceRoot);
 
   const resolvedSourceTool =
     sourceTool ??
@@ -345,4 +391,49 @@ function hydrateFindingFromResult(
     dedupKey,
     sourceTool: resolvedSourceTool,
   };
+}
+
+/**
+ * Normalize a SARIF `artifactLocation.uri` to a stable form suitable
+ * for deduplication and path-prefix filtering.
+ *
+ * Rules (in order):
+ *   1. `file://` URIs are decoded to the underlying filesystem path.
+ *   2. Absolute paths that live underneath `workspaceRoot` are rewritten
+ *      to POSIX-style workspace-relative paths (`apps/api/X.cs`).
+ *   3. Relative paths are normalized to POSIX separators unchanged.
+ *   4. Absolute paths outside the workspace and malformed URIs are
+ *      returned as-is so nothing ever silently disappears.
+ *
+ * @param uri           Raw URI from the SARIF `artifactLocation` field.
+ * @param workspaceRoot Absolute workspace root used to compute relative
+ *                      paths. When omitted, only separator normalization
+ *                      is applied.
+ * @returns             The normalized URI.
+ */
+function normalizeSarifUri(uri: string, workspaceRoot?: string): string {
+  let path = uri;
+
+  if (path.startsWith("file://")) {
+    try {
+      // `new URL("file://...").pathname` handles percent-encoding and
+      // the `file:///C:/...` Windows shape correctly.
+      path = new URL(path).pathname;
+    } catch {
+      // Malformed URL — leave the raw string alone.
+    }
+  }
+
+  if (workspaceRoot && isAbsolute(path)) {
+    const rel = relative(workspaceRoot, path);
+    // `relative` returns `..` when `path` is outside the workspace.
+    // Keep the absolute form in that case so findings remain traceable.
+    if (rel && !rel.startsWith("..")) {
+      path = rel;
+    }
+  }
+
+  // SARIF URIs are always POSIX, even on Windows. Normalize backslashes
+  // so the dedup key is stable across platforms.
+  return path.split("\\").join("/");
 }

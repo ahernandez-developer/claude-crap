@@ -5,6 +5,116 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.5] - 2026-04-13
+
+### Fixed
+
+Four bugs surfaced by a polyglot monorepo field test (a repo with a
+C# API, a Vue+TS app, an Astro+TS site, and a Flutter/Dart mobile
+client) that produced misleading `score_project` output. Every fix
+landed alongside characterization tests per the Golden Rule in
+`CLAUDE.md`; the earlier baseline (366 tests / 95 suites) expanded
+to **382 tests / 100 suites** with the new coverage.
+
+- **Stale SARIF store after scanner re-run.** `autoScan()` used to
+  merge new scanner output into the store without ever evicting the
+  previous run's findings. A scanner that produced `[A, B, C]` on run 1
+  and `[A]` on run 2 left `B` and `C` stuck in the consolidated report
+  forever. The fix adds `SarifStore.clearSourceTool(sourceTool)` and
+  calls it once per scanner in the orchestrator *before* the scanner
+  executes, so a clean run evicts the scanner's own stale findings.
+  Eviction is scoped per scanner identifier so a broken ESLint run
+  never wipes Semgrep findings. `persistNeeded` is now initialized
+  from the eviction count so an empty scan after eviction still writes
+  the cleared view to disk instead of silently reverting on reload.
+  Applies identically to the built-in cyclomatic complexity scanner
+  via a dedicated `clearSourceTool("complexity")` call. Covered by
+  new tests in `src/tests/sarif-store.test.ts` (`clearSourceTool
+  (stale-finding eviction)`).
+  (`src/sarif/sarif-store.ts`, `src/scanner/auto-scan.ts`.)
+
+- **Monorepo ESLint config shadowed by root.** `autoScan()` used to
+  dedupe detected scanners by *name* alone (`Set<KnownScanner>`), so a
+  root-level `eslint.config.mjs` shadowed every `apps/<sub>` ESLint
+  config and the sub-projects never ran their own lint pass. A
+  polyglot monorepo with `apps/app/` and `apps/www/` — each with its
+  own framework-specific ESLint rules — ended up with one
+  root-rules-only ESLint invocation instead of three. The fix adds
+  `mergeMonorepoDetections(root, mono)` to `src/scanner/detector.ts`
+  with a dedup key of `(scanner, workingDir ?? "<root>")`, so every
+  distinct working directory gets its own invocation while a scanner
+  that truly appears twice at the same path still collapses to one.
+  Each sub-project invocation runs with its own `workingDir`, so the
+  sub-project's config file governs the run instead of the root one.
+  Covered by new tests in `src/tests/auto-scan.test.ts` (`monorepo
+  detection merge` + `monorepo scanner detection in mixed workspaces`).
+  (`src/scanner/detector.ts`, `src/scanner/auto-scan.ts`.)
+
+- **`score_project --scope <project>` was LOC-only.** The scope
+  parameter used to narrow the LOC denominator (so TDR was computed
+  over the sub-project's files) but the numerator still pulled every
+  finding in the store. A mobile sub-project therefore inherited the
+  entire repo's finding count when computing reliability and security,
+  which inflated the grade dramatically — a Flutter project with zero
+  Dart findings could still earn a `C` or `D` because the scope leaked
+  in warnings from the web app next door. The fix adds
+  `filterPathPrefix?: string` and `scopeWorkspaceRoot?: string` to
+  `ComputeProjectScoreInput`, filters the in-memory finding list in
+  `computeProjectScore()` before aggregation, and threads the prefix
+  through `handleScoreProject()` from `project.path`. Matching is
+  anchored on directory boundaries so `apps/mob` never swallows
+  `apps/mobile-web`. Absolute URIs in legacy reports are normalized
+  on the fly by a `relativizeForMatch()` helper that mirrors the
+  store's `normalizeSarifUri()` logic. Covered by new tests in
+  `src/tests/score.test.ts` (`scope filtering (filterPathPrefix)`).
+  (`src/metrics/score.ts`, `src/index.ts`.)
+
+- **Path normalization: same file counted twice.** Different scanners
+  emit the `artifactLocation.uri` field in different shapes — ESLint
+  and `dotnet format` write absolute paths (`/abs/apps/api/X.cs`)
+  while the built-in complexity scanner writes workspace-relative
+  paths (`apps/api/X.cs`). The SARIF store's dedup key
+  `(ruleId, uri, startLine, startColumn)` treated these as different
+  coordinates, so the same file appeared in `byFile` twice and scope
+  filtering silently missed the absolute-path entries. The fix adds
+  `normalizeSarifUri(uri, workspaceRoot)` to `sarif-store.ts` and
+  runs it inside `hydrateFindingFromResult()` on both ingest and
+  `loadLatest()` paths. Rules: `file://` URIs are decoded to their
+  underlying path; absolute paths under `workspaceRoot` are rewritten
+  to POSIX-style relative form; relative paths get their separators
+  normalized; absolute paths outside the workspace are preserved
+  as-is so symlinks and cross-repo findings never silently disappear.
+  Covered by new tests in `src/tests/sarif-store.test.ts`
+  (`URI normalization (relative vs absolute)`).
+  (`src/sarif/sarif-store.ts`.)
+
+### Added
+
+- **`SarifStore.clearSourceTool(sourceTool)`** — public method that
+  evicts every finding whose `sourceTool` matches the given identifier.
+  Returns the number of findings removed. Used by the auto-scan
+  orchestrator to prevent stale findings from surviving a clean re-run.
+- **`mergeMonorepoDetections(root, mono)`** export from
+  `src/scanner/detector.ts` — merges root-level and sub-project
+  scanner detections by `(scanner, workingDir)`, preserving every
+  distinct invocation in polyglot monorepos.
+- **`filterPathPrefix` / `scopeWorkspaceRoot`** input fields on
+  `computeProjectScore()` — filter the finding set to a sub-project
+  prefix before aggregation. Anchored on directory boundaries so
+  prefix matches never span siblings.
+- **16 new characterization tests** across `sarif-store.test.ts`,
+  `score.test.ts`, and `auto-scan.test.ts`. Suite total: **382 tests
+  across 100 suites**.
+
+### Documentation
+
+- **Dart complexity blind spot** called out as a "Known limitation"
+  in `docs/supported-languages.md`: the cyclomatic complexity scanner
+  is silent on `.dart` files because `tree-sitter-wasms` does not
+  ship a Dart grammar. Dart sub-projects should be read as a
+  lint-quality signal via `dart analyze`, not a complexity signal,
+  until upstream grammar support lands.
+
 ## [0.4.4] - 2026-04-13
 
 ### Fixed

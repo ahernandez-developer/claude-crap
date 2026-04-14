@@ -11,13 +11,18 @@
 
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, rmSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import pino from "pino";
 
 import { autoScan, type AutoScanResult } from "../scanner/auto-scan.js";
 import { SarifStore } from "../sarif/sarif-store.js";
+import {
+  detectScanners,
+  detectMonorepoScanners,
+  mergeMonorepoDetections,
+} from "../scanner/detector.js";
 
 const logger = pino({ level: "silent" });
 
@@ -133,5 +138,101 @@ describe("autoScan", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  describe("monorepo detection merge (mergeMonorepoDetections)", () => {
+    // Pins the monorepo-user bug where root-level ESLint detection
+    // shadowed every sub-project ESLint config. The dedupe logic used
+    // `Set<scanner-name>` which collapsed e.g. root ESLint + apps/app
+    // ESLint + apps/www ESLint into a single detection. The fix keeps
+    // every (scanner, workingDir) pair so each sub-project gets its
+    // own scanner invocation.
+
+    it("keeps sub-project scanners that share a name with a root scanner", () => {
+      const rootEslint = {
+        scanner: "eslint" as const,
+        available: true,
+        reason: "config file found: eslint.config.mjs",
+      };
+      const appEslint = {
+        scanner: "eslint" as const,
+        available: true,
+        reason: "config file found in apps/app/",
+        workingDir: "/ws/apps/app",
+      };
+      const wwwEslint = {
+        scanner: "eslint" as const,
+        available: true,
+        reason: "config file found in apps/www/",
+        workingDir: "/ws/apps/www",
+      };
+      const merged = mergeMonorepoDetections([rootEslint], [appEslint, wwwEslint]);
+      // Expect three detections: one root + two sub-project.
+      const eslints = merged.filter((d) => d.scanner === "eslint");
+      assert.equal(eslints.length, 3);
+      const workingDirs = eslints.map((d) => d.workingDir ?? "<root>").sort();
+      assert.deepEqual(workingDirs, ["/ws/apps/app", "/ws/apps/www", "<root>"]);
+    });
+
+    it("still skips duplicates when the (scanner, workingDir) pair matches", () => {
+      // Two identical detections from overlapping discovery sources
+      // must collapse into one.
+      const a = {
+        scanner: "dart_analyze" as const,
+        available: true,
+        reason: "config file found in apps/mobile/",
+        workingDir: "/ws/apps/mobile",
+      };
+      const merged = mergeMonorepoDetections([a], [a]);
+      assert.equal(merged.filter((d) => d.scanner === "dart_analyze").length, 1);
+    });
+
+    it("preserves unavailable root detections while adding monorepo finds", () => {
+      const rootUnavailable = {
+        scanner: "eslint" as const,
+        available: false,
+        reason: "no config",
+      };
+      const subAvailable = {
+        scanner: "eslint" as const,
+        available: true,
+        reason: "config file found in apps/app/",
+        workingDir: "/ws/apps/app",
+      };
+      const merged = mergeMonorepoDetections([rootUnavailable], [subAvailable]);
+      const eslints = merged.filter((d) => d.scanner === "eslint");
+      assert.equal(eslints.length, 2);
+    });
+  });
+
+  describe("monorepo scanner detection in mixed workspaces", () => {
+    // Black-box integration: a workspace with a root eslint.config.mjs
+    // AND apps/app/eslint.config.mjs AND apps/www/eslint.config.mjs
+    // must see three separate ESLint detections.
+
+    it("detects ESLint at root and in every sub-app independently", async () => {
+      const dir = makeTmpDir();
+      try {
+        writeFileSync(join(dir, "eslint.config.mjs"), "export default [];");
+        mkdirSync(join(dir, "apps/app"), { recursive: true });
+        mkdirSync(join(dir, "apps/www"), { recursive: true });
+        writeFileSync(
+          join(dir, "apps/app/eslint.config.mjs"),
+          "export default [];",
+        );
+        writeFileSync(
+          join(dir, "apps/www/eslint.config.mjs"),
+          "export default [];",
+        );
+
+        const root = await detectScanners(dir);
+        const mono = await detectMonorepoScanners(dir);
+        const merged = mergeMonorepoDetections(root, mono);
+        const eslints = merged.filter((d) => d.scanner === "eslint");
+        assert.equal(eslints.length, 3, "expected 3 ESLint detections");
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
   });
 });
