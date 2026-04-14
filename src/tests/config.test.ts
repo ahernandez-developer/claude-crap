@@ -18,7 +18,7 @@
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 
-import { loadConfig } from "../config.js";
+import { loadConfig, discoverWorkspaceRoot } from "../config.js";
 
 /* ── env snapshot / restore ─────────────────────────────────────── */
 
@@ -88,6 +88,116 @@ describe("loadConfig — pluginRoot priority chain", () => {
     process.env.CLAUDE_PROJECT_DIR = "/workspace/project";
     const cfg = loadConfig();
     assert.equal(cfg.pluginRoot, "/workspace/project");
+  });
+});
+
+describe("loadConfig — defensive ${...} literal detection", () => {
+  // Claude Code only expands ${CLAUDE_PLUGIN_ROOT} in .mcp.json — any
+  // other ${VAR} is passed through verbatim. We must never treat such
+  // a literal template as a real path.
+  let saved: Snapshot;
+
+  beforeEach(() => {
+    saved = snapshotEnv();
+    clearConfigEnv();
+  });
+
+  afterEach(() => {
+    restoreEnv(saved);
+  });
+
+  it("ignores literal ${CLAUDE_PROJECT_DIR} and falls through", () => {
+    process.env.CLAUDE_PROJECT_DIR = "${CLAUDE_PROJECT_DIR}";
+    const cfg = loadConfig();
+    assert.notEqual(cfg.pluginRoot, "${CLAUDE_PROJECT_DIR}");
+    // Falls through to CLAUDE_CRAP_PLUGIN_ROOT or the last-resort fallback.
+  });
+
+  it("ignores literal ${CLAUDE_CRAP_PLUGIN_ROOT} and falls through", () => {
+    process.env.CLAUDE_CRAP_PLUGIN_ROOT = "${CLAUDE_CRAP_PLUGIN_ROOT}";
+    const cfg = loadConfig();
+    assert.notEqual(cfg.pluginRoot, "${CLAUDE_CRAP_PLUGIN_ROOT}");
+  });
+
+  it("ignores literal ${SOMETHING_ELSE} placeholder", () => {
+    process.env.CLAUDE_PROJECT_DIR = "${NOT_A_REAL_VAR}";
+    const cfg = loadConfig();
+    assert.notEqual(cfg.pluginRoot, "${NOT_A_REAL_VAR}");
+  });
+
+  it("a literal CLAUDE_PROJECT_DIR falls through to a valid CLAUDE_CRAP_PLUGIN_ROOT", () => {
+    process.env.CLAUDE_PROJECT_DIR = "${CLAUDE_PROJECT_DIR}";
+    process.env.CLAUDE_CRAP_PLUGIN_ROOT = "/explicit/plugin/root";
+    const cfg = loadConfig();
+    assert.equal(cfg.pluginRoot, "/explicit/plugin/root");
+  });
+
+  it("treats an empty CLAUDE_PROJECT_DIR as unset", () => {
+    process.env.CLAUDE_PROJECT_DIR = "";
+    process.env.CLAUDE_CRAP_PLUGIN_ROOT = "/explicit/plugin/root";
+    const cfg = loadConfig();
+    assert.equal(cfg.pluginRoot, "/explicit/plugin/root");
+  });
+});
+
+describe("discoverWorkspaceRoot — injectable parent-cwd fallback", () => {
+  // The real readParentCwd implementation reads the parent process's
+  // cwd via lsof/proc. For tests we inject a stub so we can pin the
+  // behavior without spawning lsof or depending on the host OS.
+  let saved: Snapshot;
+
+  beforeEach(() => {
+    saved = snapshotEnv();
+    clearConfigEnv();
+  });
+
+  afterEach(() => {
+    restoreEnv(saved);
+  });
+
+  it("returns env CLAUDE_PROJECT_DIR before consulting parent cwd", () => {
+    process.env.CLAUDE_PROJECT_DIR = "/workspace/project";
+    const root = discoverWorkspaceRoot({
+      readParentCwd: () => "/should/not/be/used",
+    });
+    assert.equal(root, "/workspace/project");
+  });
+
+  it("falls through literal ${...} and uses injected parent cwd", () => {
+    process.env.CLAUDE_PROJECT_DIR = "${CLAUDE_PROJECT_DIR}";
+    const root = discoverWorkspaceRoot({
+      readParentCwd: () => "/real/workspace",
+    });
+    assert.equal(root, "/real/workspace");
+  });
+
+  it("uses parent cwd when no env vars are set", () => {
+    const root = discoverWorkspaceRoot({
+      readParentCwd: () => "/discovered/via/parent",
+    });
+    assert.equal(root, "/discovered/via/parent");
+  });
+
+  it("falls back to process.cwd() when parent cwd is unavailable", () => {
+    const root = discoverWorkspaceRoot({
+      readParentCwd: () => undefined,
+    });
+    assert.equal(root, process.cwd());
+  });
+
+  it("ignores literal ${...} from parent cwd as well", () => {
+    const root = discoverWorkspaceRoot({
+      readParentCwd: () => "${something}",
+    });
+    assert.equal(root, process.cwd());
+  });
+
+  it("CLAUDE_CRAP_PLUGIN_ROOT wins over parent cwd", () => {
+    process.env.CLAUDE_CRAP_PLUGIN_ROOT = "/explicit";
+    const root = discoverWorkspaceRoot({
+      readParentCwd: () => "/parent/cwd",
+    });
+    assert.equal(root, "/explicit");
   });
 });
 

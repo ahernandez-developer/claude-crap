@@ -7358,6 +7358,52 @@ function countLines(source) {
 }
 
 // src/config.ts
+import { execFileSync } from "node:child_process";
+import { readlinkSync } from "node:fs";
+function isLiteralVarTemplate(value) {
+  if (value === void 0) return false;
+  return /^\$\{[A-Za-z_][A-Za-z0-9_]*\}$/.test(value.trim());
+}
+function sanitizeEnvPath(value) {
+  if (value === void 0 || value === "") return void 0;
+  if (isLiteralVarTemplate(value)) return void 0;
+  return value;
+}
+function readParentCwdDefault() {
+  try {
+    const ppid = process.ppid;
+    if (!ppid || ppid === 0) return void 0;
+    if (process.platform === "linux") {
+      return readlinkSync(`/proc/${ppid}/cwd`);
+    }
+    if (process.platform === "darwin") {
+      const output = execFileSync(
+        "lsof",
+        ["-a", "-p", String(ppid), "-d", "cwd", "-F", "n"],
+        {
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "ignore"],
+          timeout: 2e3
+        }
+      );
+      const match = output.match(/^n(.+)$/m);
+      return match?.[1];
+    }
+    return void 0;
+  } catch {
+    return void 0;
+  }
+}
+function discoverWorkspaceRoot(options = {}) {
+  const readParentCwd = options.readParentCwd ?? readParentCwdDefault;
+  const fromProjectDir = sanitizeEnvPath(process.env.CLAUDE_PROJECT_DIR);
+  if (fromProjectDir) return fromProjectDir;
+  const fromPluginRoot = sanitizeEnvPath(process.env.CLAUDE_CRAP_PLUGIN_ROOT);
+  if (fromPluginRoot) return fromPluginRoot;
+  const fromParent = sanitizeEnvPath(readParentCwd());
+  if (fromParent) return fromParent;
+  return process.cwd();
+}
 function parseNumber(name, raw, fallback) {
   if (raw === void 0 || raw === "") return fallback;
   const value = Number(raw);
@@ -7376,10 +7422,7 @@ function parseRating(raw, fallback) {
 }
 function loadConfig() {
   return {
-    // CLAUDE_PROJECT_DIR is set by Claude Code to the user's workspace.
-    // process.cwd() is NOT reliable — Claude Code sets it to the plugin
-    // cache directory when starting MCP servers, not the user's project.
-    pluginRoot: process.env.CLAUDE_PROJECT_DIR ?? process.env.CLAUDE_CRAP_PLUGIN_ROOT ?? process.cwd(),
+    pluginRoot: discoverWorkspaceRoot(),
     sarifOutputDir: process.env.CLAUDE_CRAP_SARIF_OUTPUT_DIR ?? ".claude-crap/reports",
     crapThreshold: parseNumber("CLAUDE_CRAP_CRAP_THRESHOLD", process.env.CLAUDE_CRAP_CRAP_THRESHOLD, 30),
     cyclomaticMax: parseNumber("CLAUDE_CRAP_CYCLOMATIC_MAX", process.env.CLAUDE_CRAP_CYCLOMATIC_MAX, 15),
