@@ -30,7 +30,7 @@ export type MaintainabilityRating = "A" | "B" | "C" | "D" | "E";
  * configuration at runtime — any change must go through a server restart.
  */
 export interface CrapConfig {
-  /** Absolute path to the plugin root on disk. Defaults to `process.cwd()`. */
+  /** Absolute path to the user's workspace. Resolved from `CLAUDE_PROJECT_DIR` → `CLAUDE_CRAP_PLUGIN_ROOT` → `process.cwd()`. */
   readonly pluginRoot: string;
   /** Directory (relative to the workspace) where consolidated SARIF reports are written. */
   readonly sarifOutputDir: string;
@@ -98,7 +98,12 @@ function parseRating(raw: string | undefined, fallback: MaintainabilityRating): 
  */
 export function loadConfig(): CrapConfig {
   return {
-    pluginRoot: process.env.CLAUDE_CRAP_PLUGIN_ROOT ?? process.cwd(),
+    // CLAUDE_PROJECT_DIR is set by Claude Code to the user's workspace.
+    // process.cwd() is NOT reliable — Claude Code sets it to the plugin
+    // cache directory when starting MCP servers, not the user's project.
+    pluginRoot: process.env.CLAUDE_PROJECT_DIR
+      ?? process.env.CLAUDE_CRAP_PLUGIN_ROOT
+      ?? process.cwd(),
     sarifOutputDir: process.env.CLAUDE_CRAP_SARIF_OUTPUT_DIR ?? ".claude-crap/reports",
     crapThreshold: parseNumber("CLAUDE_CRAP_CRAP_THRESHOLD", process.env.CLAUDE_CRAP_CRAP_THRESHOLD, 30),
     cyclomaticMax: parseNumber("CLAUDE_CRAP_CYCLOMATIC_MAX", process.env.CLAUDE_CRAP_CYCLOMATIC_MAX, 15),
