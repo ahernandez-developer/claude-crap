@@ -9,11 +9,14 @@
  *   user settings  →  plugin.json "options"  →  .mcp.json "env"  →  this file
  *
  * If any environment variable is missing or empty, a safe default is used,
- * but the loader NEVER invents stochastic values and NEVER performs I/O.
- * This module is the single source of truth for runtime configuration.
+ * but the loader NEVER invents stochastic values. This module is the
+ * single source of truth for runtime configuration.
  *
  * @module config
  */
+
+import { execFileSync } from "node:child_process";
+import { readlinkSync } from "node:fs";
 
 /**
  * Maintainability rating letter grades used throughout claude-crap.
@@ -30,7 +33,7 @@ export type MaintainabilityRating = "A" | "B" | "C" | "D" | "E";
  * configuration at runtime — any change must go through a server restart.
  */
 export interface CrapConfig {
-  /** Absolute path to the user's workspace. Resolved from `CLAUDE_PROJECT_DIR` → `CLAUDE_CRAP_PLUGIN_ROOT` → `process.cwd()`. */
+  /** Absolute path to the user's workspace. Resolved via {@link discoverWorkspaceRoot}. */
   readonly pluginRoot: string;
   /** Directory (relative to the workspace) where consolidated SARIF reports are written. */
   readonly sarifOutputDir: string;
@@ -44,6 +47,112 @@ export interface CrapConfig {
   readonly minutesPerLoc: number;
   /** Local TCP port the Vue.js dashboard will bind to. */
   readonly dashboardPort: number;
+}
+
+/**
+ * Detects an unexpanded `.mcp.json` variable template such as
+ * `${CLAUDE_PROJECT_DIR}`. Claude Code only expands `${CLAUDE_PLUGIN_ROOT}`
+ * inside `.mcp.json`; every other `${VAR}` is passed through verbatim and
+ * must NOT be treated as a real filesystem path.
+ */
+function isLiteralVarTemplate(value: string | undefined): boolean {
+  if (value === undefined) return false;
+  return /^\$\{[A-Za-z_][A-Za-z0-9_]*\}$/.test(value.trim());
+}
+
+/**
+ * Normalize an environment variable that is expected to contain a path.
+ * Returns `undefined` if the value is missing, empty, or an unexpanded
+ * `${...}` template. Any non-empty concrete string is returned as-is.
+ */
+function sanitizeEnvPath(value: string | undefined): string | undefined {
+  if (value === undefined || value === "") return undefined;
+  if (isLiteralVarTemplate(value)) return undefined;
+  return value;
+}
+
+/**
+ * Read the current working directory of the parent process. Claude Code
+ * spawns MCP servers with its own cwd set to the user's workspace, so the
+ * parent's cwd is the most reliable fallback when `CLAUDE_PROJECT_DIR` is
+ * not inherited (e.g. because Claude Code only exports it for hooks).
+ *
+ * Returns `undefined` on any platform or failure mode the probe cannot
+ * handle — callers must be prepared for a missing result.
+ */
+function readParentCwdDefault(): string | undefined {
+  try {
+    const ppid = process.ppid;
+    if (!ppid || ppid === 0) return undefined;
+
+    if (process.platform === "linux") {
+      // /proc/<pid>/cwd is a symlink to the process's cwd.
+      return readlinkSync(`/proc/${ppid}/cwd`);
+    }
+
+    if (process.platform === "darwin") {
+      // `lsof -a -p <pid> -d cwd -F n` emits a single line starting with
+      // `n<path>` for the cwd file descriptor. `-F` keeps the output
+      // machine-readable.
+      const output = execFileSync(
+        "lsof",
+        ["-a", "-p", String(ppid), "-d", "cwd", "-F", "n"],
+        {
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "ignore"],
+          timeout: 2000,
+        },
+      );
+      const match = output.match(/^n(.+)$/m);
+      return match?.[1];
+    }
+
+    // Windows and other platforms: no reliable no-dep probe.
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Parameters accepted by {@link discoverWorkspaceRoot}. The only field is
+ * an injectable `readParentCwd` implementation so that tests can pin the
+ * fallback behavior without spawning `lsof` or reading `/proc`.
+ */
+export interface DiscoverWorkspaceOptions {
+  readParentCwd?: () => string | undefined;
+}
+
+/**
+ * Resolve the user's workspace directory. Strategy, in strict priority
+ * order:
+ *
+ *   1. `CLAUDE_PROJECT_DIR`      (sanitized — ignored if it's `${...}`)
+ *   2. `CLAUDE_CRAP_PLUGIN_ROOT` (sanitized — legacy explicit override)
+ *   3. Parent process cwd       (Claude Code's cwd = the workspace)
+ *   4. `process.cwd()`          (last-resort fallback; usually wrong for
+ *                                MCP servers because Claude Code sets
+ *                                cwd to the plugin cache directory)
+ *
+ * This function NEVER returns an unexpanded `${...}` template; any source
+ * that contains one is skipped as if it were unset.
+ *
+ * @param options Injection points for tests.
+ * @returns       A concrete filesystem path.
+ */
+export function discoverWorkspaceRoot(options: DiscoverWorkspaceOptions = {}): string {
+  const readParentCwd = options.readParentCwd ?? readParentCwdDefault;
+
+  const fromProjectDir = sanitizeEnvPath(process.env.CLAUDE_PROJECT_DIR);
+  if (fromProjectDir) return fromProjectDir;
+
+  const fromPluginRoot = sanitizeEnvPath(process.env.CLAUDE_CRAP_PLUGIN_ROOT);
+  if (fromPluginRoot) return fromPluginRoot;
+
+  const fromParent = sanitizeEnvPath(readParentCwd());
+  if (fromParent) return fromParent;
+
+  return process.cwd();
 }
 
 /**
@@ -98,12 +207,7 @@ function parseRating(raw: string | undefined, fallback: MaintainabilityRating): 
  */
 export function loadConfig(): CrapConfig {
   return {
-    // CLAUDE_PROJECT_DIR is set by Claude Code to the user's workspace.
-    // process.cwd() is NOT reliable — Claude Code sets it to the plugin
-    // cache directory when starting MCP servers, not the user's project.
-    pluginRoot: process.env.CLAUDE_PROJECT_DIR
-      ?? process.env.CLAUDE_CRAP_PLUGIN_ROOT
-      ?? process.cwd(),
+    pluginRoot: discoverWorkspaceRoot(),
     sarifOutputDir: process.env.CLAUDE_CRAP_SARIF_OUTPUT_DIR ?? ".claude-crap/reports",
     crapThreshold: parseNumber("CLAUDE_CRAP_CRAP_THRESHOLD", process.env.CLAUDE_CRAP_CRAP_THRESHOLD, 30),
     cyclomaticMax: parseNumber("CLAUDE_CRAP_CYCLOMATIC_MAX", process.env.CLAUDE_CRAP_CYCLOMATIC_MAX, 15),

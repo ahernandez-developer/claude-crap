@@ -10,8 +10,7 @@
         "stdio"
       ],
       "env": {
-        "NODE_ENV": "production",
-        "CLAUDE_PROJECT_DIR": "${CLAUDE_PROJECT_DIR}"
+        "NODE_ENV": "production"
       }
     }
   }
