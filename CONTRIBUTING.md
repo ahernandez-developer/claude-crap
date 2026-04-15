@@ -46,6 +46,52 @@ coordinated change set, open an issue first so we can track the rollout.
 
 ---
 
+## PR labels
+
+Apply at least one **type** label to every PR. Labels are not decorative —
+they drive triage, release notes, and automation. Add a **scope** label if
+the change lives in a single area, and a **meta** label (`ai-assisted`) if
+an AI agent wrote any part of the diff.
+
+### Type — pick exactly one
+
+| Label | When to use |
+| :-- | :-- |
+| `bug` | Fixing broken behavior. PR body must link to a reproducer or show the failing characterization test first. |
+| `enhancement` | New feature, new scanner adapter, new MCP tool, new CLI flag, new language support. |
+| `documentation` | README, `docs/`, `CONTRIBUTING.md`, JSDoc, or inline comments. No production code. |
+| `refactor` | Internal cleanup with no user-visible change. **Only open if a maintainer explicitly asked for it** — see [How to contribute](#how-to-contribute). |
+| `dependencies` | `package.json` / `package-lock.json` bumps, Renovate PRs, lockfile refreshes. |
+| `breaking-change` | Any change that would force a major version bump — MCP tool signature change, hook contract change, CLI flag removal, SARIF store schema migration, etc. Pair with one of the above. |
+
+### Scope — optional, one or more
+
+Add only when the change is narrowly confined. Skip scope labels entirely
+for cross-cutting work — the type label plus a clear PR body is enough.
+
+| Label | Code it covers |
+| :-- | :-- |
+| `scope:hooks` | `plugin/hooks/**` — PreToolUse, PostToolUse, Stop, SessionStart. |
+| `scope:mcp` | `src/index.ts`, MCP tool registration, JSON schemas. |
+| `scope:adapters` | `src/adapters/**` — scanner output parsers (ESLint, Semgrep, Bandit, Stryker, `dart analyze`, `dotnet format`). |
+| `scope:engines` | `src/metrics/**`, `src/sarif/**`, `src/monorepo/**` — pure engines. |
+| `scope:dashboard` | `src/dashboard/**` — Fastify server + Vue SPA. |
+| `scope:cli` | `bin/**` and `src/cli/**` — installer, doctor, bug-report. |
+
+### Meta — apply as needed
+
+| Label | When to use |
+| :-- | :-- |
+| `ai-assisted` | **Required** whenever an AI coding agent wrote any part of the diff. See [AI-assisted PRs welcome](#ai-assisted-prs-welcome). |
+| `good first issue` | **Maintainer-applied** on issues suitable for new contributors. Do not add it to your own PR. |
+| `help wanted` | **Maintainer-applied** to signal a stalled PR that needs a second reviewer. |
+| `question` | For issues, not PRs. If your PR raises an open question, open a [discussion](https://github.com/ahernandez-developer/claude-crap/discussions) instead. |
+
+If a label you need does not exist yet, mention it in the PR body and the
+maintainer will create it — do not block on missing labels.
+
+---
+
 ## AI-assisted PRs welcome
 
 claude-crap is built **for** AI-assisted development and dog-foods its own
@@ -55,7 +101,7 @@ want transparency so reviewers know what to look for.
 
 If an agent touched the diff, please include in the PR description:
 
-- [ ] Mark the PR as AI-assisted (title prefix `[ai]` or a checkbox in the body)
+- [ ] **Apply the `ai-assisted` label** (and optionally prefix the title with `[ai]`)
 - [ ] Which agent and model (e.g. `Claude Code + Opus 4.6`, `Codex + GPT-5`)
 - [ ] Testing level — **untested** / **lightly tested** / **fully tested**
 - [ ] A short summary of the prompts or session if that would help review
@@ -233,6 +279,8 @@ Before asking for review:
 - [ ] PR description follows the [rigid deduction format](./plugin/CLAUDE.md)
       and clearly describes any user-visible change (the maintainer writes
       the `CHANGELOG.md` entry at release time)
+- [ ] **At least one type label** is applied (see [PR labels](#pr-labels)),
+      plus `ai-assisted` if an agent touched the diff
 - [ ] `package.json` version is **not** bumped and `CHANGELOG.md` is **not**
       edited — releases are maintainer-only
 - [ ] If AI-assisted, the AI-assisted PR checklist above is filled in
