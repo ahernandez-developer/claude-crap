@@ -53,7 +53,9 @@ they drive triage, release notes, and automation. Add a **scope** label if
 the change lives in a single area, and a **meta** label (`ai-assisted`) if
 an AI agent wrote any part of the diff.
 
-### Type — pick exactly one
+### Type — every PR needs one
+
+Pick **exactly one** of these five base types:
 
 | Label | When to use |
 | :-- | :-- |
@@ -62,7 +64,13 @@ an AI agent wrote any part of the diff.
 | `documentation` | README, `docs/`, `CONTRIBUTING.md`, JSDoc, or inline comments. No production code. |
 | `refactor` | Internal cleanup with no user-visible change. **Only open if a maintainer explicitly asked for it** — see [How to contribute](#how-to-contribute). |
 | `dependencies` | `package.json` / `package-lock.json` bumps, Renovate PRs, lockfile refreshes. |
-| `breaking-change` | Any change that would force a major version bump — MCP tool signature change, hook contract change, CLI flag removal, SARIF store schema migration, etc. Pair with one of the above. |
+
+Then add `breaking-change` **on top of the base type** if the PR forces a
+major version bump:
+
+| Label | When to use |
+| :-- | :-- |
+| `breaking-change` | Modifier — pair with one base type above. Signals a change that forces a major version bump: MCP tool signature change, hook contract change, CLI flag removal, SARIF store schema migration, etc. |
 
 ### Scope — optional, one or more
 
@@ -154,10 +162,13 @@ You do not need to launch Claude Code to exercise a hook. Pipe a fake event
 into it directly:
 
 ```bash
-CLAUDE_PROJECT_DIR=$(pwd) \
-  echo '{"hook_event_name":"Stop","tool_name":"none","tool_input":{}}' \
-  | node ./plugin/hooks/stop-quality-gate.mjs
+echo '{"hook_event_name":"Stop","tool_name":"none","tool_input":{}}' \
+  | CLAUDE_PROJECT_DIR=$(pwd) node ./plugin/hooks/stop-quality-gate.mjs
 ```
+
+The env-var prefix must sit in front of `node` — a prefix in front of `echo`
+would only scope `CLAUDE_PROJECT_DIR` to the left side of the pipe, and the
+hook process would not see it.
 
 ### Boot the MCP server standalone
 
@@ -185,7 +196,7 @@ policy. If a change regresses the grade, you will know immediately.
 
 ## Test layout
 
-```
+```text
 src/tests/
 ├── crap.test.ts                        CRAP formula
 ├── cyclomatic.test.ts                  tree-sitter complexity walker
