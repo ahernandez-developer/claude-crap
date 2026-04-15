@@ -262,9 +262,14 @@ Quick version:
 1. Fork and branch off `main`.
 2. **Write the test first** — the Golden Rule forbids code before a safety net.
 3. Run `npm test` — full suite must stay green.
-4. Update `CHANGELOG.md` if user-visible behavior changed.
-5. Open a PR using the [rigid deduction format](./plugin/CLAUDE.md).
-6. If AI-assisted, mark the PR and include the agent/model + testing level.
+4. Open a PR using the [rigid deduction format](./plugin/CLAUDE.md) and
+   describe the user-visible change in the PR body.
+5. If AI-assisted, mark the PR and include the agent/model + testing level.
+
+**Do not** bump the `package.json` version or edit `CHANGELOG.md` — version
+bumps, release notes, and npm publishes are handled by the maintainer
+([@ahernandez-developer](https://github.com/ahernandez-developer)) at release
+time.
 
 Full dev loop, test layout, coding conventions, release process, the
 AI-assisted PR checklist, and security reporting are all in

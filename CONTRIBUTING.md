@@ -191,10 +191,22 @@ npm run test:integration  # MCP server integration
 
 ---
 
-## Release process
+## Release process (maintainer only)
 
-Releases go through [`np`](https://github.com/sindresorhus/np), which runs
-`clean + build + test` before tagging and publishing to npm:
+> **Version bumps, `CHANGELOG.md` entries, git tags, and npm publishes
+> are the maintainer's responsibility — not contributors'.**
+>
+> Opening a PR is the end of the contributor workflow. Please **do not**
+> run `npm run release:*`, edit the `version` field in `package.json`,
+> or add a new section to `CHANGELOG.md` in your PR. Describe the change
+> in your PR body (the *what* and the *why*) and the maintainer will
+> curate release notes when cutting the next version.
+>
+> Maintainer: **Alan Hernandez** ([@ahernandez-developer](https://github.com/ahernandez-developer)).
+
+For maintainer reference, releases go through
+[`np`](https://github.com/sindresorhus/np), which runs `clean + build + test`
+before tagging and publishing to npm:
 
 ```bash
 npm run release         # interactive — prompts for patch/minor/major
@@ -217,9 +229,12 @@ Before asking for review:
 - [ ] `npm test` is green
 - [ ] `npx claude-crap doctor` reports 0 failures
 - [ ] New code has unit tests (Golden Rule)
-- [ ] `CHANGELOG.md` is updated if user-visible behavior changed
 - [ ] Commit message explains the **why**, not just the **what**
 - [ ] PR description follows the [rigid deduction format](./plugin/CLAUDE.md)
+      and clearly describes any user-visible change (the maintainer writes
+      the `CHANGELOG.md` entry at release time)
+- [ ] `package.json` version is **not** bumped and `CHANGELOG.md` is **not**
+      edited — releases are maintainer-only
 - [ ] If AI-assisted, the AI-assisted PR checklist above is filled in
 
 The GitHub Actions CI workflow (`.github/workflows/ci.yml`) runs the same
