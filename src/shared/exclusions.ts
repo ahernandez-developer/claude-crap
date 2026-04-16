@@ -37,6 +37,21 @@ export const DEFAULT_SKIP_DIRS: ReadonlySet<string> = new Set([
   "out",
   "target",
   "coverage",
+  "artifacts",    // CI artefact staging, Maven
+  "publish",      // `dotnet publish` output
+
+  // Desktop / mobile packaging outputs
+  "dist-electron",// Electron-builder
+  "release",      // Electron-builder, Tauri
+
+  // .NET per-project build outputs (conventional at any depth)
+  "bin",
+  "obj",
+
+  // iOS / macOS dependency + build caches
+  "Pods",         // CocoaPods
+  "DerivedData",  // Xcode
+  "Carthage",     // Swift
 
   // Framework build outputs
   ".next",        // Next.js

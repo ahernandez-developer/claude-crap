@@ -299,4 +299,132 @@ describe("persistProjectMap / loadProjectMap", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it("non-monorepo map round-trips through persist + load", async () => {
+    // list_projects and /api/score rely on projects.json existing after
+    // a discovery run, even when the workspace has no sub-projects. The
+    // persist + load pair must handle `isMonorepo: false` the same as
+    // monorepo maps.
+    const dir = makeTmpDir();
+    try {
+      const original: ProjectMap = {
+        generatedAt: new Date().toISOString(),
+        workspaceRoot: dir,
+        isMonorepo: false,
+        projects: [],
+      };
+
+      await persistProjectMap(original, dir);
+      const loaded = loadProjectMap(dir);
+
+      assert.ok(loaded !== null, "non-monorepo map did not persist");
+      assert.equal(loaded.isMonorepo, false);
+      assert.deepEqual(loaded, original);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+// ── .slnx / Directory.Build.props detection ──────────────────────────
+
+describe("discoverProjectMap — .NET project markers", () => {
+  it(".slnx (.NET 9 XML solution) marks csharp", async () => {
+    const dir = makeTmpDir();
+    try {
+      mkdirSync(join(dir, "apps", "api"), { recursive: true });
+      writeFileSync(join(dir, "apps", "api", "MyApp.slnx"), "<Solution></Solution>");
+
+      const map = await discoverProjectMap(dir);
+      const api = findProject(map, "apps/api");
+      assert.equal(api.type, "csharp", "expected .slnx to classify as csharp");
+      assert.equal(api.scanner, "dotnet_format");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("Directory.Build.props alone marks csharp", async () => {
+    const dir = makeTmpDir();
+    try {
+      mkdirSync(join(dir, "apps", "shared-lib"), { recursive: true });
+      writeFileSync(
+        join(dir, "apps", "shared-lib", "Directory.Build.props"),
+        "<Project></Project>",
+      );
+
+      const map = await discoverProjectMap(dir);
+      const p = findProject(map, "apps/shared-lib");
+      assert.equal(p.type, "csharp", "Directory.Build.props should classify as csharp");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+// ── pnpm-workspace.yaml discovery ────────────────────────────────────
+
+describe("discoverProjectMap — pnpm-workspace.yaml", () => {
+  it("reads pnpm-workspace.yaml and discovers declared packages", async () => {
+    const dir = makeTmpDir();
+    try {
+      // Non-conventional parent dir that the built-in apps/packages scan
+      // would never find. pnpm-workspace must be the only source of truth.
+      writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "root" }));
+      writeFileSync(
+        join(dir, "pnpm-workspace.yaml"),
+        ["packages:", "  - \"tooling/*\"", ""].join("\n"),
+      );
+
+      mkdirSync(join(dir, "tooling", "cli"), { recursive: true });
+      writeFileSync(join(dir, "tooling", "cli", "package.json"), JSON.stringify({ name: "cli" }));
+      writeFileSync(join(dir, "tooling", "cli", "tsconfig.json"), "{}");
+
+      const map = await discoverProjectMap(dir);
+      const cli = findProject(map, "tooling/cli");
+      assert.equal(cli.type, "typescript");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("handles plain-path entries in pnpm-workspace.yaml", async () => {
+    const dir = makeTmpDir();
+    try {
+      writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "root" }));
+      writeFileSync(
+        join(dir, "pnpm-workspace.yaml"),
+        ["packages:", "  - 'clients/mobile'", ""].join("\n"),
+      );
+
+      mkdirSync(join(dir, "clients", "mobile"), { recursive: true });
+      writeFileSync(
+        join(dir, "clients", "mobile", "package.json"),
+        JSON.stringify({ name: "mobile" }),
+      );
+
+      const map = await discoverProjectMap(dir);
+      const mobile = findProject(map, "clients/mobile");
+      assert.equal(mobile.type, "javascript"); // no tsconfig → js
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("falls back gracefully when pnpm-workspace.yaml is malformed", async () => {
+    const dir = makeTmpDir();
+    try {
+      writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "root" }));
+      writeFileSync(
+        join(dir, "pnpm-workspace.yaml"),
+        "this: is: not: actually: valid: yaml\n",
+      );
+
+      // Must not throw.
+      const map = await discoverProjectMap(dir);
+      assert.ok(Array.isArray(map.projects));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });

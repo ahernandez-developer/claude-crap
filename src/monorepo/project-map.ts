@@ -170,11 +170,17 @@ function detectProjectType(dir: string): ProjectType {
   }
 
   // C# — check the well-known single-file marker first, then scan for
-  // per-project extension files (.csproj / .sln) at this level only.
+  // per-project extension files (.csproj / .sln / .slnx) at this level
+  // only. .slnx is the XML solution format introduced with .NET 9.
   if (has("Directory.Build.props")) return "csharp";
   try {
     const entries = readdirSync(dir);
-    if (entries.some((e) => e.endsWith(".csproj") || e.endsWith(".sln"))) {
+    if (
+      entries.some(
+        (e) =>
+          e.endsWith(".csproj") || e.endsWith(".sln") || e.endsWith(".slnx"),
+      )
+    ) {
       return "csharp";
     }
   } catch {
@@ -208,6 +214,60 @@ function extractWorkspacePatterns(workspaces: unknown): string[] {
     );
   }
   return [];
+}
+
+/**
+ * Parse a minimal pnpm-workspace.yaml into a list of package patterns.
+ *
+ * Supports the shape the pnpm CLI actually emits and documents:
+ *
+ *   packages:
+ *     - "apps/*"
+ *     - 'clients/mobile'
+ *     - tooling/cli
+ *
+ * Deliberately a bespoke parser: a full YAML engine is a large
+ * dependency for a single configuration file, and pnpm's own format is
+ * a narrow subset. Unsupported constructs (anchors, flow sequences,
+ * nested mappings) fall through as "no patterns", which in turn lets
+ * the caller fall back to the conventional directory scan.
+ *
+ * @param yaml Raw contents of a pnpm-workspace.yaml file.
+ * @returns    Array of package patterns, or an empty array.
+ */
+function parsePnpmWorkspaceYaml(yaml: string): string[] {
+  const patterns: string[] = [];
+  const lines = yaml.split(/\r?\n/);
+  let inPackages = false;
+
+  for (const rawLine of lines) {
+    // Strip inline comments — pnpm-workspace.yaml commonly carries them.
+    const line = rawLine.replace(/#.*$/, "").replace(/\s+$/, "");
+    if (line.length === 0) continue;
+
+    // Top-level key "packages:" starts the list.
+    if (/^packages\s*:\s*$/.test(line)) {
+      inPackages = true;
+      continue;
+    }
+
+    // Any other top-level key ends the packages block.
+    if (inPackages && /^[^\s-]/.test(line)) {
+      inPackages = false;
+      continue;
+    }
+
+    if (!inPackages) continue;
+
+    // List item: "  - value" with optional single/double quotes.
+    const m = /^\s*-\s*("([^"]*)"|'([^']*)'|([^#\s]+))\s*$/.exec(line);
+    if (m) {
+      const value = m[2] ?? m[3] ?? m[4] ?? "";
+      if (value.length > 0) patterns.push(value);
+    }
+  }
+
+  return patterns;
 }
 
 /**
@@ -285,6 +345,24 @@ function collectSubdirectories(
       }
     } catch {
       // Malformed JSON or read error — skip npm workspaces source.
+    }
+  }
+
+  // 1b. pnpm workspaces — package.json does not carry a `workspaces`
+  //     field under pnpm; the source of truth is pnpm-workspace.yaml.
+  const pnpmPath = join(workspaceRoot, "pnpm-workspace.yaml");
+  if (existsSync(pnpmPath)) {
+    try {
+      const raw = readFileSync(pnpmPath, "utf-8");
+      const patterns = parsePnpmWorkspaceYaml(raw);
+      for (const pattern of patterns) {
+        for (const absPath of expandWorkspacePattern(workspaceRoot, pattern)) {
+          subdirs.add(absPath);
+        }
+      }
+    } catch {
+      // Read error — skip pnpm workspaces source. The parser itself
+      // never throws; malformed content just yields an empty array.
     }
   }
 
