@@ -167,6 +167,20 @@ function tokenizeBash(cmd) {
 }
 
 /**
+ * Extract the basename of a command token. `rm`, `/bin/rm`, `./rm`, and
+ * `../bin/rm` all resolve to `"rm"`. Used so path-qualified invocations
+ * cannot bypass detection — the shell looks up the binary by the last
+ * path segment, and so does the gatekeeper.
+ *
+ * @param {string} token
+ * @returns {string}
+ */
+function basename(token) {
+  const i = token.lastIndexOf("/");
+  return i === -1 ? token : token.slice(i + 1);
+}
+
+/**
  * True when a flag token requests recursive or force semantics. Accepts
  * long forms (`--recursive`, `--force`) and short-flag clusters that
  * include any of `r`, `R`, `f` (`-rf`, `-Rf`, `-rfv`, ...).
@@ -219,12 +233,17 @@ function classifyRmTarget(target) {
 export function findDestructiveBashHit(command) {
   if (!command) return null;
 
-  // Mode 1 — token walk for rm invocations.
+  // Mode 1 — token walk for rm invocations. Match on the basename of
+  // the token so path-qualified forms (`/bin/rm`, `./rm`, `../bin/rm`)
+  // are caught. This intentionally accepts the cosmetic false positive
+  // of `echo rm -rf /` blocking — the outcome is safe (the LLM is
+  // asked to reformulate) and a full executable-position parser
+  // introduces its own bypass edge cases around wrapper flags.
   const tokens = tokenizeBash(command);
   for (let i = 0; i < tokens.length; i++) {
     const t = /** @type {{ text: string, quoted: boolean }} */ (tokens[i]);
     if (t.quoted) continue;
-    if (t.text !== "rm") continue;
+    if (basename(t.text) !== "rm") continue;
 
     // Collect flags + targets until end or a command separator.
     const flags = [];

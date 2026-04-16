@@ -82,6 +82,12 @@ describe("destructive rm blocks filesystem root, system dirs, and $HOME", () => 
     "rm -rf /&&ls",
     "rm -rf /|tee log",
     "rm -rf /;rm -rf /tmp/x",
+    // Path-qualified rm must be caught on basename. Absolute, relative,
+    // and parent-relative forms are all real invocations the shell honors.
+    "/bin/rm -rf /",
+    "/usr/bin/rm -rf /",
+    "./rm -rf /",
+    "../bin/rm -rf /",
   ];
 
   for (const cmd of MUST_BLOCK) {
