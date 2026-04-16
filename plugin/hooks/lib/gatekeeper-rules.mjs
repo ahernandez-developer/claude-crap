@@ -136,21 +136,32 @@ export function formatBashRuleId(pattern) {
 
 /**
  * Tokenise a shell command into argv-like tokens that distinguish
- * quoted strings from bare words. Intentionally minimal — handles
- * single and double quotes, ignores backslash escapes, and does not
- * expand variables. Sufficient for gatekeeper intent detection.
+ * quoted strings from bare words, and emit unquoted shell control
+ * operators (`;`, `&&`, `||`, `|`, `&`) as their own tokens. Emitting
+ * operators as separate tokens prevents a target argument from "sticking"
+ * to an operator and slipping past target classification — `rm -rf /;ls`
+ * must tokenise to `[..., -rf, /, ;, ls]`, not `[..., -rf, /;ls]`.
+ *
+ * Intentionally minimal: single and double quotes only, no backslash-escape
+ * handling, no variable expansion. Sufficient for gatekeeper intent
+ * detection — a full shell parser is out of scope.
  *
  * @param {string} cmd
  * @returns {Array<{ text: string, quoted: boolean }>}
  */
 function tokenizeBash(cmd) {
   const tokens = [];
-  const re = /"((?:[^"\\]|\\.)*)"|'([^']*)'|(\S+)/g;
+  // Alternation order matters: quoted strings first (so their contents are
+  // preserved verbatim), then control operators (longest match first:
+  // `&&`/`||` before `&`/`|`), then bare runs of non-whitespace that stop
+  // at the next operator character.
+  const re = /"((?:[^"\\]|\\.)*)"|'([^']*)'|(&&|\|\||;|\||&)|([^\s;|&"']+)/g;
   let m;
   while ((m = re.exec(cmd)) !== null) {
     if (m[1] !== undefined) tokens.push({ text: m[1], quoted: true });
     else if (m[2] !== undefined) tokens.push({ text: m[2], quoted: true });
-    else tokens.push({ text: /** @type {string} */ (m[3]), quoted: false });
+    else if (m[3] !== undefined) tokens.push({ text: /** @type {string} */ (m[3]), quoted: false });
+    else tokens.push({ text: /** @type {string} */ (m[4]), quoted: false });
   }
   return tokens;
 }
@@ -172,12 +183,17 @@ function isRecursiveOrForceFlag(token) {
  * Classify the destination argument of a recursive `rm` into one of the
  * high-severity categories we block, or `null` if the target is benign.
  *
+ * Home-directory matching covers exact (`~`, `$HOME`) and prefixed
+ * (`~/anything`, `$HOME/anything`, `~/*`) forms — every path rooted at
+ * the user's home is considered destructive under recursive force.
+ *
  * @param {string} target
  * @returns {"RMROOT" | "RMSYSDIR" | "RMHOME" | null}
  */
 function classifyRmTarget(target) {
   if (target === "/" || target === "/*") return "RMROOT";
-  if (target === "$HOME" || target === "~" || target === "~/") return "RMHOME";
+  // ~, ~/, ~/anything, ~/*, $HOME, $HOME/, $HOME/anything, $HOME/*
+  if (/^(~|\$HOME)(\/.*|\*)?$/.test(target)) return "RMHOME";
   // Any path whose first component is a protected system directory.
   const m = /^\/([A-Za-z]+)(\/|$)/.exec(target);
   if (m && RM_SYSTEM_DIRS.has(/** @type {string} */ (m[1]))) return "RMSYSDIR";
@@ -261,7 +277,10 @@ export function findSecretHits(text) {
     // Reset stateful /g regexes between invocations.
     if (pat.re.global) pat.re.lastIndex = 0;
     if (pat.id === "AWS") {
-      for (const m of text.matchAll(/AKIA[0-9A-Z]{16}/g)) {
+      // Reuse the canonical pattern from the rule table rather than
+      // duplicating the literal here — a single source of truth for
+      // the regex means the allowlist can never drift from the matcher.
+      for (const m of text.matchAll(pat.re)) {
         if (AWS_BENIGN_EXAMPLES.has(m[0])) continue;
         hits.push({ id: "AWS", ruleId: formatSecretRuleId({ id: "AWS" }), match: m[0] });
       }

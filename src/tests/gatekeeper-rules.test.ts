@@ -68,8 +68,20 @@ describe("destructive rm blocks filesystem root, system dirs, and $HOME", () => 
     "rm -rf /bin",
     "rm -rf /boot",
     "rm -rf /System",
-    // Home directory shortcuts (already covered by RMHOME; keep pinned).
+    // Home directory, exact and prefix forms.
     "rm -rf $HOME",
+    "rm -rf $HOME/foo",
+    "rm -rf $HOME/*",
+    "rm -rf ~/",
+    "rm -rf ~/stuff",
+    "rm -rf ~/*",
+    // Shell control operators must not let the target "stick" and bypass
+    // classification. `/;echo` was previously a single bare token whose
+    // first component failed the system-dir regex, passing the check.
+    "rm -rf /;echo done",
+    "rm -rf /&&ls",
+    "rm -rf /|tee log",
+    "rm -rf /;rm -rf /tmp/x",
   ];
 
   for (const cmd of MUST_BLOCK) {
