@@ -1,0 +1,35 @@
+# Configuration for GitHub's auto-generated release notes.
+# Referenced by `softprops/action-gh-release@v2` with
+# `generate_release_notes: true` in `.github/workflows/release.yml`.
+#
+# Docs: https://docs.github.com/en/repositories/releasing-projects-on-github/automatically-generated-release-notes
+
+changelog:
+  exclude:
+    labels:
+      - ignore-for-release
+      - skip-changelog
+    authors:
+      - dependabot[bot]
+  categories:
+    - title: Features
+      labels:
+        - feature
+        - enhancement
+    - title: Bug Fixes
+      labels:
+        - bug
+        - fix
+    - title: Documentation
+      labels:
+        - documentation
+        - docs
+    - title: Maintenance
+      labels:
+        - chore
+        - refactor
+        - ci
+        - build
+    - title: Other Changes
+      labels:
+        - "*"

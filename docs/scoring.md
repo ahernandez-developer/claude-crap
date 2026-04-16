@@ -81,9 +81,13 @@ interface ComputeProjectScoreInput {
 
 The workspace LOC stats come from `estimateWorkspaceLoc()` in
 `src/metrics/workspace-walker.ts`, which is a bounded walker that
-skips `node_modules`, `.git`, `dist`, `build`, `target`, `.venv`,
-`__pycache__`, `.next`, and `.claude-crap` and hard-stops at 20,000
-files.
+skips dependency caches, VCS metadata, and build artefacts — including
+Electron (`dist-electron`, `release`), .NET (`bin`, `obj`, `publish`),
+iOS/Xcode (`Pods`, `DerivedData`, `Carthage`), CI (`artifacts`), and
+generic output directories — so the TDR denominator reflects code the
+team actually writes. See
+[docs/supported-languages.md#file-exclusions](./supported-languages.md#file-exclusions)
+for the full list. The walker hard-stops at 20,000 files.
 
 ## Classification pipeline
 
