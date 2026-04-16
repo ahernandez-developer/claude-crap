@@ -99,20 +99,13 @@ jobs:
         if: steps.should_release.outputs.skip == 'false' && steps.npm_check.outputs.published == 'false'
         run: npx npm@latest publish --provenance --access public
 
-      - name: Extract changelog for this version
-        if: steps.should_release.outputs.skip == 'false'
-        run: |
-          version="${{ steps.version.outputs.version }}"
-          awk "/^## \[${version}\]/{found=1; next} /^## \[/{if(found) exit} found{print}" CHANGELOG.md > /tmp/release-notes.md
-          if [ ! -s /tmp/release-notes.md ]; then
-            echo "Release ${version}" > /tmp/release-notes.md
-          fi
-
+      # Release notes are produced by GitHub's native auto-generator from
+      # merged PRs between the previous tag and this one. Category headings
+      # and label → section mapping live in `.github/release.yml`.
       - name: Create GitHub Release
         if: steps.should_release.outputs.skip == 'false'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
           name: v${{ steps.version.outputs.version }}
-          body_path: /tmp/release-notes.md
-          generate_release_notes: false
+          generate_release_notes: true

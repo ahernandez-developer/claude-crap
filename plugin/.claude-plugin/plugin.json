@@ -1,7 +1,7 @@
 {
   "$schema": "https://code.claude.com/schemas/plugin.json",
   "name": "claude-crap",
-  "version": "0.4.5",
+  "version": "0.4.6",
   "description": "Deterministic Quality Assurance plugin for Claude Code. Wraps every Write / Edit / Bash tool call with a PreToolUse gatekeeper, a PostToolUse verifier, and a Stop quality gate backed by CRAP index, Technical Debt Ratio, tree-sitter AST metrics, and SARIF 2.1.0 reports. Forbids the agent from writing functional code before a test safety net exists.",
   "author": {
     "name": "Alan Hernandez",

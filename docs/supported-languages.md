@@ -122,7 +122,8 @@ with `effortMinutes` estimates before ingestion.
 
 ## C# / .NET
 
-**Detection:** `.csproj`, `.sln`, or `Directory.Build.props` files.
+**Detection:** `.csproj`, `.sln`, `.slnx`, or `Directory.Build.props` files.
+`.slnx` is the XML solution format introduced with .NET 9.
 
 **Scanner:** `dotnet format` -- the built-in Roslyn analyzer included
 in the .NET SDK. No extra installation needed.
@@ -210,7 +211,7 @@ packages relative to their own `pubspec.yaml`.
 ## Monorepo auto-discovery
 
 claude-crap automatically discovers sub-projects at session boot.
-The discovery probes three sources (merged, deduplicated):
+The discovery probes four sources (merged, deduplicated):
 
 ### 1. npm workspaces
 
@@ -220,13 +221,34 @@ Reads `package.json` at the workspace root for the `workspaces` field:
 // Array format
 { "workspaces": ["apps/frontend", "apps/backend", "packages/shared"] }
 
-// Object format (Yarn/pnpm)
+// Object format (Yarn)
 { "workspaces": { "packages": ["packages/*"] } }
 ```
 
-Glob patterns like `packages/*` are expanded one level deep.
+Glob patterns like `packages/*` are expanded one level deep. Patterns
+that resolve outside the workspace root (e.g. `../shared/*`) are
+dropped silently so a misconfigured manifest cannot widen the scan
+scope.
 
-### 2. Built-in directories
+### 2. pnpm workspaces
+
+pnpm stores its workspace layout in a separate `pnpm-workspace.yaml`
+file rather than in `package.json`. claude-crap reads the top-level
+`packages:` block, supports quoted and bare entries with or without
+globs, and applies the same one-level glob expansion and workspace
+containment guard as npm workspaces.
+
+```yaml
+packages:
+  - "apps/*"
+  - "tooling/cli"
+```
+
+Malformed YAML is swallowed rather than propagated, so an invalid
+`pnpm-workspace.yaml` falls back cleanly to the other discovery
+sources.
+
+### 3. Built-in directories
 
 The following directories are scanned one level deep automatically:
 
@@ -236,7 +258,7 @@ The following directories are scanned one level deep automatically:
 - `modules/`
 - `services/`
 
-### 3. User-configured projectDirs
+### 4. User-configured projectDirs
 
 For non-standard layouts, add `projectDirs` to `.claude-crap.json`:
 
@@ -263,7 +285,7 @@ marker files in priority order:
 3. `package.json` (alone) --> **javascript**
 4. `pyproject.toml` / `setup.py` / `requirements.txt` --> **python**
 5. `pom.xml` / `build.gradle*` --> **java**
-6. `.csproj` / `.sln` / `Directory.Build.props` --> **csharp**
+6. `.csproj` / `.sln` / `.slnx` / `Directory.Build.props` --> **csharp**
 7. None of the above --> **unknown**
 
 ### Scanner assignment
@@ -321,11 +343,20 @@ All findings aggregate into one SARIF store. Use
 All scanners and the workspace walker share a centralized exclusion
 list. The following are excluded by default:
 
-**Directories:** `node_modules`, `vendor`, `.git`, `dist`, `build`,
-`bundle`, `out`, `target`, `coverage`, `.next`, `.nuxt`, `.output`,
-`.vercel`, `.svelte-kit`, `.astro`, `.angular`, `.turbo`,
-`.parcel-cache`, `.expo`, `.venv`, `venv`, `__pycache__`, `.cache`,
-`.dart_tool`, `.gradle`, `.idea`, `.claude-crap`, `.codesight`
+**Directories** (grouped by purpose):
+
+- Dependencies / VCS: `node_modules`, `vendor`, `.git`
+- Generic build outputs: `dist`, `build`, `bundle`, `out`, `target`,
+  `coverage`, `artifacts`, `publish`
+- Electron / Tauri packaging: `dist-electron`, `release`
+- .NET per-project build: `bin`, `obj`
+- iOS / macOS dependency + build caches: `Pods`, `DerivedData`, `Carthage`
+- Framework outputs: `.next`, `.nuxt`, `.output`, `.vercel`,
+  `.svelte-kit`, `.astro`, `.angular`, `.turbo`, `.parcel-cache`, `.expo`
+- Language caches: `.venv`, `venv`, `__pycache__`, `.cache`,
+  `.dart_tool`, `.gradle`
+- IDE / plugin state: `.idea`, `.claude-crap`, `.claude-plugin`,
+  `.claude-sonar`, `.codesight`
 
 **File patterns:** `*.min.js`, `*.min.css`, `*.min.mjs`, `*.min.cjs`,
 `*.bundle.js`, `*.chunk.js`
