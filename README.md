@@ -28,7 +28,7 @@ model's reach.
 > originally developed by Alberto Savoia and Bob Evans at Google (2007).
 > [Read the original post.](https://testing.googleblog.com/2011/02/this-code-is-crap.html)
 
-[Quick Start](#quick-start) · [Configuration](#configuration) · [How It Works](#how-it-works) · [MCP Tools](#mcp-tools) · [Documentation](#documentation) · [Development](#development) · [Contributing](#contributing)
+[Quick Start](#quick-start) · [Configuration](#configuration) · [How It Works](#how-it-works) · [MCP Tools](#mcp-tools) · [Documentation](#documentation) · [Contributing](#contributing)
 
 ---
 
@@ -148,7 +148,7 @@ Full schemas, inputs, outputs, and examples in
 - **Zero native deps** — WASM-backed tree-sitter, no C compiler needed.
 
 Windows: requires a POSIX shell (Git Bash or WSL).
-See [docs/contributing.md](./docs/contributing.md) for Windows setup details.
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for Windows setup details.
 
 ---
 
@@ -230,27 +230,9 @@ added via `.claude-crap.json`:
 | MCP tools & resources | [docs/mcp-tools.md](./docs/mcp-tools.md) |
 | Scanner adapters | [docs/scanner-adapters.md](./docs/scanner-adapters.md) |
 | SDK reference | [docs/sdk.md](./docs/sdk.md) |
-| Contributing & dev loop | [docs/contributing.md](./docs/contributing.md) |
+| Contributing & dev loop | [CONTRIBUTING.md](./CONTRIBUTING.md) |
 | Agent contract | [plugin/CLAUDE.md](./plugin/CLAUDE.md) |
 | Changelog | [CHANGELOG.md](./CHANGELOG.md) |
-
----
-
-## Development
-
-```bash
-npm install          # postinstall builds dist/ automatically
-npm test             # 382 tests across 100 suites
-npm run build:fast   # esbuild dev build (10-20x faster than tsc)
-npm run doctor       # full diagnostic
-```
-
-Release via [`np`](https://github.com/sindresorhus/np):
-`npm run release:patch` / `release:minor` / `release:major`.
-`prepublishOnly` runs clean + build + test + audit automatically.
-
-Full dev loop, test commands, and standalone MCP server instructions
-in [docs/contributing.md](./docs/contributing.md).
 
 ---
 
@@ -270,13 +252,28 @@ Review the output, then open an issue at
 
 ## Contributing
 
+claude-crap welcomes PRs — **including AI-assisted ones.** The plugin is built
+for AI-assisted development and dog-foods its own quality gate, so Codex /
+Claude Code / Cursor / Copilot diffs are first-class contributions. All we ask
+is transparency and the Golden Rule: **no production code without a test.**
+
+Quick version:
+
 1. Fork and branch off `main`.
 2. **Write the test first** — the Golden Rule forbids code before a safety net.
 3. Run `npm test` — full suite must stay green.
-4. Update `CHANGELOG.md`.
-5. Open a PR in the [rigid deduction format](./plugin/CLAUDE.md).
+4. Open a PR using the [rigid deduction format](./plugin/CLAUDE.md) and
+   describe the user-visible change in the PR body.
+5. If AI-assisted, mark the PR and include the agent/model + testing level.
 
-Full guide: [docs/contributing.md](./docs/contributing.md).
+**Do not** bump the `package.json` version or edit `CHANGELOG.md` — version
+bumps, release notes, and npm publishes are handled by the maintainer
+([@ahernandez-developer](https://github.com/ahernandez-developer)) at release
+time.
+
+Full dev loop, test layout, coding conventions, release process, the
+AI-assisted PR checklist, and security reporting are all in
+[CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ---
 
