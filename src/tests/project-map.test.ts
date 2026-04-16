@@ -456,6 +456,40 @@ describe("discoverProjectMap — pnpm-workspace.yaml", () => {
   });
 });
 
+// ── Workspace containment guard ──────────────────────────────────────
+
+describe("discoverProjectMap — workspace containment", () => {
+  it("drops pnpm-workspace patterns that escape the workspace root", async () => {
+    // Sibling directory outside the workspace — if the containment
+    // guard fails, the walker would scan it and inflate the TDR.
+    const parent = makeTmpDir();
+    try {
+      const workspace = join(parent, "workspace");
+      const sibling = join(parent, "sibling");
+      mkdirSync(join(sibling, "pkg"), { recursive: true });
+      writeFileSync(join(sibling, "pkg", "package.json"), JSON.stringify({ name: "escapee" }));
+
+      mkdirSync(workspace, { recursive: true });
+      writeFileSync(join(workspace, "package.json"), JSON.stringify({ name: "root" }));
+      writeFileSync(
+        join(workspace, "pnpm-workspace.yaml"),
+        ["packages:", "  - \"../sibling/*\"", ""].join("\n"),
+      );
+
+      const map = await discoverProjectMap(workspace);
+
+      const escapee = map.projects.find((p) => p.path.includes("sibling"));
+      assert.equal(
+        escapee,
+        undefined,
+        `expected no project outside workspace, got: ${JSON.stringify(escapee)}`,
+      );
+    } finally {
+      rmSync(parent, { recursive: true, force: true });
+    }
+  });
+});
+
 // ── projectDirs + .NET-only project marker ───────────────────────────
 
 describe("discoverProjectMap — configured projectDirs with .NET-only markers", () => {

@@ -3585,49 +3585,49 @@ var require_fast_uri = __commonJS({
       schemelessOptions.skipEscape = true;
       return serialize(resolved, schemelessOptions);
     }
-    function resolveComponent(base, relative6, options, skipNormalization) {
+    function resolveComponent(base, relative7, options, skipNormalization) {
       const target = {};
       if (!skipNormalization) {
         base = parse(serialize(base, options), options);
-        relative6 = parse(serialize(relative6, options), options);
+        relative7 = parse(serialize(relative7, options), options);
       }
       options = options || {};
-      if (!options.tolerant && relative6.scheme) {
-        target.scheme = relative6.scheme;
-        target.userinfo = relative6.userinfo;
-        target.host = relative6.host;
-        target.port = relative6.port;
-        target.path = removeDotSegments(relative6.path || "");
-        target.query = relative6.query;
+      if (!options.tolerant && relative7.scheme) {
+        target.scheme = relative7.scheme;
+        target.userinfo = relative7.userinfo;
+        target.host = relative7.host;
+        target.port = relative7.port;
+        target.path = removeDotSegments(relative7.path || "");
+        target.query = relative7.query;
       } else {
-        if (relative6.userinfo !== void 0 || relative6.host !== void 0 || relative6.port !== void 0) {
-          target.userinfo = relative6.userinfo;
-          target.host = relative6.host;
-          target.port = relative6.port;
-          target.path = removeDotSegments(relative6.path || "");
-          target.query = relative6.query;
+        if (relative7.userinfo !== void 0 || relative7.host !== void 0 || relative7.port !== void 0) {
+          target.userinfo = relative7.userinfo;
+          target.host = relative7.host;
+          target.port = relative7.port;
+          target.path = removeDotSegments(relative7.path || "");
+          target.query = relative7.query;
         } else {
-          if (!relative6.path) {
+          if (!relative7.path) {
             target.path = base.path;
-            if (relative6.query !== void 0) {
-              target.query = relative6.query;
+            if (relative7.query !== void 0) {
+              target.query = relative7.query;
             } else {
               target.query = base.query;
             }
           } else {
-            if (relative6.path[0] === "/") {
-              target.path = removeDotSegments(relative6.path);
+            if (relative7.path[0] === "/") {
+              target.path = removeDotSegments(relative7.path);
             } else {
               if ((base.userinfo !== void 0 || base.host !== void 0 || base.port !== void 0) && !base.path) {
-                target.path = "/" + relative6.path;
+                target.path = "/" + relative7.path;
               } else if (!base.path) {
-                target.path = relative6.path;
+                target.path = relative7.path;
               } else {
-                target.path = base.path.slice(0, base.path.lastIndexOf("/") + 1) + relative6.path;
+                target.path = base.path.slice(0, base.path.lastIndexOf("/") + 1) + relative7.path;
               }
               target.path = removeDotSegments(target.path);
             }
-            target.query = relative6.query;
+            target.query = relative7.query;
           }
           target.userinfo = base.userinfo;
           target.host = base.host;
@@ -3635,7 +3635,7 @@ var require_fast_uri = __commonJS({
         }
         target.scheme = base.scheme;
       }
-      target.fragment = relative6.fragment;
+      target.fragment = relative7.fragment;
       return target;
     }
     function equal(uriA, uriB, options) {
@@ -9737,7 +9737,7 @@ async function autoScan(workspaceRoot, sarifStore, logger2, options) {
 // src/monorepo/project-map.ts
 import { existsSync as existsSync6, readFileSync as readFileSync5, readdirSync as readdirSync3 } from "node:fs";
 import { promises as fs8 } from "node:fs";
-import { join as join12, basename as basename2, resolve as resolve8 } from "node:path";
+import { join as join12, basename as basename2, resolve as resolve8, relative as relative6, isAbsolute as isAbsolute5 } from "node:path";
 import { execFile as execFile4 } from "node:child_process";
 var MONOREPO_DIRS2 = ["apps", "packages", "libs", "modules", "services"];
 var SCANNER_FOR_TYPE = {
@@ -9843,16 +9843,22 @@ function parsePnpmWorkspaceYaml(yaml) {
   return patterns;
 }
 function expandWorkspacePattern(workspaceRoot, pattern) {
+  const isInsideWorkspace = (candidate) => {
+    const rel = relative6(workspaceRoot, candidate);
+    return rel === "" || !rel.startsWith("..") && !isAbsolute5(rel);
+  };
   if (pattern.endsWith("/*")) {
     const parentDir = join12(workspaceRoot, pattern.slice(0, -2));
+    if (!isInsideWorkspace(parentDir)) return [];
     try {
       const entries = readdirSync3(parentDir, { withFileTypes: true });
-      return entries.filter((e) => e.isDirectory() && !e.name.startsWith(".")).map((e) => join12(parentDir, e.name));
+      return entries.filter((e) => e.isDirectory() && !e.name.startsWith(".")).map((e) => join12(parentDir, e.name)).filter(isInsideWorkspace);
     } catch {
       return [];
     }
   }
   const full = resolve8(workspaceRoot, pattern);
+  if (!isInsideWorkspace(full)) return [];
   try {
     const entries = readdirSync3(full, { withFileTypes: true });
     void entries;

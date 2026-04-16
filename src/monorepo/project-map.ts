@@ -30,7 +30,7 @@
 
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { promises as fs } from "node:fs";
-import { join, basename, resolve } from "node:path";
+import { join, basename, resolve, relative, isAbsolute } from "node:path";
 import { execFile } from "node:child_process";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -313,14 +313,24 @@ function expandWorkspacePattern(
   workspaceRoot: string,
   pattern: string,
 ): string[] {
+  // Guard against patterns that escape the workspace root (e.g.
+  // `../shared/*` in pnpm-workspace.yaml). External paths are dropped
+  // silently so a misconfigured manifest cannot widen the scan scope.
+  const isInsideWorkspace = (candidate: string): boolean => {
+    const rel = relative(workspaceRoot, candidate);
+    return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
+  };
+
   if (pattern.endsWith("/*")) {
     // Glob: list one level of the parent directory.
     const parentDir = join(workspaceRoot, pattern.slice(0, -2));
+    if (!isInsideWorkspace(parentDir)) return [];
     try {
       const entries = readdirSync(parentDir, { withFileTypes: true });
       return entries
         .filter((e) => e.isDirectory() && !e.name.startsWith("."))
-        .map((e) => join(parentDir, e.name));
+        .map((e) => join(parentDir, e.name))
+        .filter(isInsideWorkspace);
     } catch {
       return [];
     }
@@ -328,6 +338,7 @@ function expandWorkspacePattern(
 
   // Plain path — verify it exists and is a directory.
   const full = resolve(workspaceRoot, pattern);
+  if (!isInsideWorkspace(full)) return [];
   try {
     const entries = readdirSync(full, { withFileTypes: true });
     // readdirSync succeeds only for directories; if we got here it exists.
