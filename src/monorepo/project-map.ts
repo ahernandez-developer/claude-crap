@@ -30,7 +30,7 @@
 
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { promises as fs } from "node:fs";
-import { join, basename, resolve } from "node:path";
+import { join, basename, resolve, relative, isAbsolute } from "node:path";
 import { execFile } from "node:child_process";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -170,11 +170,17 @@ function detectProjectType(dir: string): ProjectType {
   }
 
   // C# — check the well-known single-file marker first, then scan for
-  // per-project extension files (.csproj / .sln) at this level only.
+  // per-project extension files (.csproj / .sln / .slnx) at this level
+  // only. .slnx is the XML solution format introduced with .NET 9.
   if (has("Directory.Build.props")) return "csharp";
   try {
     const entries = readdirSync(dir);
-    if (entries.some((e) => e.endsWith(".csproj") || e.endsWith(".sln"))) {
+    if (
+      entries.some(
+        (e) =>
+          e.endsWith(".csproj") || e.endsWith(".sln") || e.endsWith(".slnx"),
+      )
+    ) {
       return "csharp";
     }
   } catch {
@@ -211,6 +217,88 @@ function extractWorkspacePatterns(workspaces: unknown): string[] {
 }
 
 /**
+ * Parse a minimal pnpm-workspace.yaml into a list of package patterns.
+ *
+ * Supports the shape the pnpm CLI actually emits and documents:
+ *
+ *   packages:
+ *     - "apps/*"
+ *     - 'clients/mobile'
+ *     - tooling/cli
+ *
+ * Deliberately a bespoke parser: a full YAML engine is a large
+ * dependency for a single configuration file, and pnpm's own format is
+ * a narrow subset. Unsupported constructs (anchors, flow sequences,
+ * nested mappings) fall through as "no patterns", which in turn lets
+ * the caller fall back to the conventional directory scan.
+ *
+ * @param yaml Raw contents of a pnpm-workspace.yaml file.
+ * @returns    Array of package patterns, or an empty array.
+ */
+/**
+ * Strip a `#` inline comment from a YAML line while respecting single-
+ * and double-quoted scalars. Anchors, block scalars, and escape sequences
+ * beyond `\"` are out of scope — pnpm-workspace.yaml never uses them.
+ */
+function stripYamlComment(line: string): string {
+  let inSingle = false;
+  let inDouble = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === "\\" && inDouble && i + 1 < line.length) {
+      i++; // skip the escaped character inside a double-quoted scalar
+      continue;
+    }
+    if (!inDouble && ch === "'") {
+      inSingle = !inSingle;
+    } else if (!inSingle && ch === '"') {
+      inDouble = !inDouble;
+    } else if (!inSingle && !inDouble && ch === "#") {
+      return line.slice(0, i);
+    }
+  }
+  return line;
+}
+
+function parsePnpmWorkspaceYaml(yaml: string): string[] {
+  const patterns: string[] = [];
+  const lines = yaml.split(/\r?\n/);
+  let inPackages = false;
+
+  for (const rawLine of lines) {
+    // Strip inline comments — but only when `#` is outside quotes, so a
+    // valid entry like `"packages/#tools"` survives.
+    const line = stripYamlComment(rawLine).replace(/\s+$/, "");
+    if (line.length === 0) continue;
+
+    // Top-level key "packages:" starts the list.
+    if (/^packages\s*:\s*$/.test(line)) {
+      inPackages = true;
+      continue;
+    }
+
+    // Any other top-level key ends the packages block.
+    if (inPackages && /^[^\s-]/.test(line)) {
+      inPackages = false;
+      continue;
+    }
+
+    if (!inPackages) continue;
+
+    // List item: "  - value" with optional single/double quotes. The
+    // bare-word branch can now safely include `#`, because inline
+    // comments are already stripped by stripYamlComment() above.
+    const m = /^\s*-\s*("([^"]*)"|'([^']*)'|(\S+))\s*$/.exec(line);
+    if (m) {
+      const value = m[2] ?? m[3] ?? m[4] ?? "";
+      if (value.length > 0) patterns.push(value);
+    }
+  }
+
+  return patterns;
+}
+
+/**
  * Expand a single workspace glob pattern into matching absolute paths.
  *
  * Only supports the common `dir/*` form (one trailing `*`) and plain
@@ -225,14 +313,24 @@ function expandWorkspacePattern(
   workspaceRoot: string,
   pattern: string,
 ): string[] {
+  // Guard against patterns that escape the workspace root (e.g.
+  // `../shared/*` in pnpm-workspace.yaml). External paths are dropped
+  // silently so a misconfigured manifest cannot widen the scan scope.
+  const isInsideWorkspace = (candidate: string): boolean => {
+    const rel = relative(workspaceRoot, candidate);
+    return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
+  };
+
   if (pattern.endsWith("/*")) {
     // Glob: list one level of the parent directory.
     const parentDir = join(workspaceRoot, pattern.slice(0, -2));
+    if (!isInsideWorkspace(parentDir)) return [];
     try {
       const entries = readdirSync(parentDir, { withFileTypes: true });
       return entries
         .filter((e) => e.isDirectory() && !e.name.startsWith("."))
-        .map((e) => join(parentDir, e.name));
+        .map((e) => join(parentDir, e.name))
+        .filter(isInsideWorkspace);
     } catch {
       return [];
     }
@@ -240,6 +338,7 @@ function expandWorkspacePattern(
 
   // Plain path — verify it exists and is a directory.
   const full = resolve(workspaceRoot, pattern);
+  if (!isInsideWorkspace(full)) return [];
   try {
     const entries = readdirSync(full, { withFileTypes: true });
     // readdirSync succeeds only for directories; if we got here it exists.
@@ -288,6 +387,24 @@ function collectSubdirectories(
     }
   }
 
+  // 1b. pnpm workspaces — package.json does not carry a `workspaces`
+  //     field under pnpm; the source of truth is pnpm-workspace.yaml.
+  const pnpmPath = join(workspaceRoot, "pnpm-workspace.yaml");
+  if (existsSync(pnpmPath)) {
+    try {
+      const raw = readFileSync(pnpmPath, "utf-8");
+      const patterns = parsePnpmWorkspaceYaml(raw);
+      for (const pattern of patterns) {
+        for (const absPath of expandWorkspacePattern(workspaceRoot, pattern)) {
+          subdirs.add(absPath);
+        }
+      }
+    } catch {
+      // Read error — skip pnpm workspaces source. The parser itself
+      // never throws; malformed content just yields an empty array.
+    }
+  }
+
   // 2. User-configured projectDirs from .claude-crap.json (highest priority).
   //    These can be parent directories scanned one level deep (e.g. "apps")
   //    or direct project paths (e.g. "tools/cli").
@@ -297,8 +414,7 @@ function collectSubdirectories(
       if (!existsSync(absDir)) continue;
 
       // If the directory itself has a project marker, treat it as a project.
-      const hasMarker = PROJECT_MARKERS.some((m) => existsSync(join(absDir, m)));
-      if (hasMarker) {
+      if (directoryIsProjectRoot(absDir)) {
         subdirs.add(absDir);
         continue;
       }
@@ -343,6 +459,28 @@ const PROJECT_MARKERS = [
   "package.json", "pubspec.yaml", "pyproject.toml", "setup.py",
   "pom.xml", "build.gradle", "build.gradle.kts", "Directory.Build.props",
 ];
+
+/** Per-project file extensions that indicate a .NET project root. */
+const DOTNET_PROJECT_EXTENSIONS = [".csproj", ".sln", ".slnx"] as const;
+
+/**
+ * Return true when `absDir` looks like a project root — either because
+ * it carries one of the well-known {@link PROJECT_MARKERS} single-file
+ * markers, or because it contains a .NET per-project file
+ * (`.csproj` / `.sln` / `.slnx`). The .NET branch is separate because
+ * those markers use extensions rather than fixed filenames.
+ */
+function directoryIsProjectRoot(absDir: string): boolean {
+  if (PROJECT_MARKERS.some((m) => existsSync(join(absDir, m)))) return true;
+  try {
+    const entries = readdirSync(absDir);
+    return entries.some((e) =>
+      DOTNET_PROJECT_EXTENSIONS.some((ext) => e.endsWith(ext)),
+    );
+  } catch {
+    return false;
+  }
+}
 
 // ── Public API ─────────────────────────────────────────────────────────────
 

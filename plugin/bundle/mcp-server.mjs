@@ -3585,49 +3585,49 @@ var require_fast_uri = __commonJS({
       schemelessOptions.skipEscape = true;
       return serialize(resolved, schemelessOptions);
     }
-    function resolveComponent(base, relative6, options, skipNormalization) {
+    function resolveComponent(base, relative7, options, skipNormalization) {
       const target = {};
       if (!skipNormalization) {
         base = parse(serialize(base, options), options);
-        relative6 = parse(serialize(relative6, options), options);
+        relative7 = parse(serialize(relative7, options), options);
       }
       options = options || {};
-      if (!options.tolerant && relative6.scheme) {
-        target.scheme = relative6.scheme;
-        target.userinfo = relative6.userinfo;
-        target.host = relative6.host;
-        target.port = relative6.port;
-        target.path = removeDotSegments(relative6.path || "");
-        target.query = relative6.query;
+      if (!options.tolerant && relative7.scheme) {
+        target.scheme = relative7.scheme;
+        target.userinfo = relative7.userinfo;
+        target.host = relative7.host;
+        target.port = relative7.port;
+        target.path = removeDotSegments(relative7.path || "");
+        target.query = relative7.query;
       } else {
-        if (relative6.userinfo !== void 0 || relative6.host !== void 0 || relative6.port !== void 0) {
-          target.userinfo = relative6.userinfo;
-          target.host = relative6.host;
-          target.port = relative6.port;
-          target.path = removeDotSegments(relative6.path || "");
-          target.query = relative6.query;
+        if (relative7.userinfo !== void 0 || relative7.host !== void 0 || relative7.port !== void 0) {
+          target.userinfo = relative7.userinfo;
+          target.host = relative7.host;
+          target.port = relative7.port;
+          target.path = removeDotSegments(relative7.path || "");
+          target.query = relative7.query;
         } else {
-          if (!relative6.path) {
+          if (!relative7.path) {
             target.path = base.path;
-            if (relative6.query !== void 0) {
-              target.query = relative6.query;
+            if (relative7.query !== void 0) {
+              target.query = relative7.query;
             } else {
               target.query = base.query;
             }
           } else {
-            if (relative6.path[0] === "/") {
-              target.path = removeDotSegments(relative6.path);
+            if (relative7.path[0] === "/") {
+              target.path = removeDotSegments(relative7.path);
             } else {
               if ((base.userinfo !== void 0 || base.host !== void 0 || base.port !== void 0) && !base.path) {
-                target.path = "/" + relative6.path;
+                target.path = "/" + relative7.path;
               } else if (!base.path) {
-                target.path = relative6.path;
+                target.path = relative7.path;
               } else {
-                target.path = base.path.slice(0, base.path.lastIndexOf("/") + 1) + relative6.path;
+                target.path = base.path.slice(0, base.path.lastIndexOf("/") + 1) + relative7.path;
               }
               target.path = removeDotSegments(target.path);
             }
-            target.query = relative6.query;
+            target.query = relative7.query;
           }
           target.userinfo = base.userinfo;
           target.host = base.host;
@@ -3635,7 +3635,7 @@ var require_fast_uri = __commonJS({
         }
         target.scheme = base.scheme;
       }
-      target.fragment = relative6.fragment;
+      target.fragment = relative7.fragment;
       return target;
     }
     function equal(uriA, uriB, options) {
@@ -7454,6 +7454,25 @@ var DEFAULT_SKIP_DIRS = /* @__PURE__ */ new Set([
   "out",
   "target",
   "coverage",
+  "artifacts",
+  // CI artefact staging, Maven
+  "publish",
+  // `dotnet publish` output
+  // Desktop / mobile packaging outputs
+  "dist-electron",
+  // Electron-builder
+  "release",
+  // Electron-builder, Tauri
+  // .NET per-project build outputs (conventional at any depth)
+  "bin",
+  "obj",
+  // iOS / macOS dependency + build caches
+  "Pods",
+  // CocoaPods
+  "DerivedData",
+  // Xcode
+  "Carthage",
+  // Swift
   // Framework build outputs
   ".next",
   // Next.js
@@ -9124,7 +9143,9 @@ function detectProjectType(workspaceRoot) {
   if (has("Directory.Build.props")) return "csharp";
   try {
     const entries = readdirSync2(workspaceRoot);
-    if (entries.some((e) => e.endsWith(".csproj") || e.endsWith(".sln"))) {
+    if (entries.some(
+      (e) => e.endsWith(".csproj") || e.endsWith(".sln") || e.endsWith(".slnx")
+    )) {
       return "csharp";
     }
   } catch {
@@ -9716,7 +9737,7 @@ async function autoScan(workspaceRoot, sarifStore, logger2, options) {
 // src/monorepo/project-map.ts
 import { existsSync as existsSync6, readFileSync as readFileSync5, readdirSync as readdirSync3 } from "node:fs";
 import { promises as fs8 } from "node:fs";
-import { join as join12, basename as basename2, resolve as resolve8 } from "node:path";
+import { join as join12, basename as basename2, resolve as resolve8, relative as relative6, isAbsolute as isAbsolute5 } from "node:path";
 import { execFile as execFile4 } from "node:child_process";
 var MONOREPO_DIRS2 = ["apps", "packages", "libs", "modules", "services"];
 var SCANNER_FOR_TYPE = {
@@ -9758,7 +9779,9 @@ function detectProjectType2(dir) {
   if (has("Directory.Build.props")) return "csharp";
   try {
     const entries = readdirSync3(dir);
-    if (entries.some((e) => e.endsWith(".csproj") || e.endsWith(".sln"))) {
+    if (entries.some(
+      (e) => e.endsWith(".csproj") || e.endsWith(".sln") || e.endsWith(".slnx")
+    )) {
       return "csharp";
     }
   } catch {
@@ -9776,17 +9799,66 @@ function extractWorkspacePatterns(workspaces) {
   }
   return [];
 }
+function stripYamlComment(line) {
+  let inSingle = false;
+  let inDouble = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === "\\" && inDouble && i + 1 < line.length) {
+      i++;
+      continue;
+    }
+    if (!inDouble && ch === "'") {
+      inSingle = !inSingle;
+    } else if (!inSingle && ch === '"') {
+      inDouble = !inDouble;
+    } else if (!inSingle && !inDouble && ch === "#") {
+      return line.slice(0, i);
+    }
+  }
+  return line;
+}
+function parsePnpmWorkspaceYaml(yaml) {
+  const patterns = [];
+  const lines = yaml.split(/\r?\n/);
+  let inPackages = false;
+  for (const rawLine of lines) {
+    const line = stripYamlComment(rawLine).replace(/\s+$/, "");
+    if (line.length === 0) continue;
+    if (/^packages\s*:\s*$/.test(line)) {
+      inPackages = true;
+      continue;
+    }
+    if (inPackages && /^[^\s-]/.test(line)) {
+      inPackages = false;
+      continue;
+    }
+    if (!inPackages) continue;
+    const m = /^\s*-\s*("([^"]*)"|'([^']*)'|(\S+))\s*$/.exec(line);
+    if (m) {
+      const value = m[2] ?? m[3] ?? m[4] ?? "";
+      if (value.length > 0) patterns.push(value);
+    }
+  }
+  return patterns;
+}
 function expandWorkspacePattern(workspaceRoot, pattern) {
+  const isInsideWorkspace = (candidate) => {
+    const rel = relative6(workspaceRoot, candidate);
+    return rel === "" || !rel.startsWith("..") && !isAbsolute5(rel);
+  };
   if (pattern.endsWith("/*")) {
     const parentDir = join12(workspaceRoot, pattern.slice(0, -2));
+    if (!isInsideWorkspace(parentDir)) return [];
     try {
       const entries = readdirSync3(parentDir, { withFileTypes: true });
-      return entries.filter((e) => e.isDirectory() && !e.name.startsWith(".")).map((e) => join12(parentDir, e.name));
+      return entries.filter((e) => e.isDirectory() && !e.name.startsWith(".")).map((e) => join12(parentDir, e.name)).filter(isInsideWorkspace);
     } catch {
       return [];
     }
   }
   const full = resolve8(workspaceRoot, pattern);
+  if (!isInsideWorkspace(full)) return [];
   try {
     const entries = readdirSync3(full, { withFileTypes: true });
     void entries;
@@ -9811,12 +9883,24 @@ function collectSubdirectories(workspaceRoot, extraDirs) {
     } catch {
     }
   }
+  const pnpmPath = join12(workspaceRoot, "pnpm-workspace.yaml");
+  if (existsSync6(pnpmPath)) {
+    try {
+      const raw = readFileSync5(pnpmPath, "utf-8");
+      const patterns = parsePnpmWorkspaceYaml(raw);
+      for (const pattern of patterns) {
+        for (const absPath of expandWorkspacePattern(workspaceRoot, pattern)) {
+          subdirs.add(absPath);
+        }
+      }
+    } catch {
+    }
+  }
   if (extraDirs && extraDirs.length > 0) {
     for (const dir of extraDirs) {
       const absDir = resolve8(workspaceRoot, dir);
       if (!existsSync6(absDir)) continue;
-      const hasMarker = PROJECT_MARKERS.some((m) => existsSync6(join12(absDir, m)));
-      if (hasMarker) {
+      if (directoryIsProjectRoot(absDir)) {
         subdirs.add(absDir);
         continue;
       }
@@ -9857,6 +9941,18 @@ var PROJECT_MARKERS = [
   "build.gradle.kts",
   "Directory.Build.props"
 ];
+var DOTNET_PROJECT_EXTENSIONS = [".csproj", ".sln", ".slnx"];
+function directoryIsProjectRoot(absDir) {
+  if (PROJECT_MARKERS.some((m) => existsSync6(join12(absDir, m)))) return true;
+  try {
+    const entries = readdirSync3(absDir);
+    return entries.some(
+      (e) => DOTNET_PROJECT_EXTENSIONS.some((ext) => e.endsWith(ext))
+    );
+  } catch {
+    return false;
+  }
+}
 async function discoverProjectMap(workspaceRoot, options) {
   const subdirs = collectSubdirectories(workspaceRoot, options?.projectDirs);
   const binaryCache = /* @__PURE__ */ new Map();

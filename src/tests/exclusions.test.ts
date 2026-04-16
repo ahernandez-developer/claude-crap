@@ -31,6 +31,25 @@ describe("DEFAULT_SKIP_DIRS", () => {
       assert.ok(DEFAULT_SKIP_DIRS.has(dir), `missing: ${dir}`);
     }
   });
+
+  it("includes Electron/CI/iOS/.NET build outputs", () => {
+    // These directories host compiled or packaged artefacts; counting
+    // them inflates the LOC denominator of the TDR on every real
+    // Electron, Xcode, or .NET workspace.
+    for (const dir of [
+      "dist-electron",  // Electron-builder
+      "release",        // Electron-builder, Tauri
+      "artifacts",      // CI, Maven
+      "publish",        // dotnet publish
+      "bin",            // .NET build
+      "obj",            // .NET build
+      "Pods",           // CocoaPods
+      "DerivedData",    // Xcode
+      "Carthage",       // Swift
+    ]) {
+      assert.ok(DEFAULT_SKIP_DIRS.has(dir), `missing skip dir: ${dir}`);
+    }
+  });
 });
 
 describe("DEFAULT_SKIP_PATTERNS", () => {
