@@ -10,7 +10,7 @@ changelog:
       - ignore-for-release
       - skip-changelog
     authors:
-      - dependabot
+      - dependabot[bot]
   categories:
     - title: Features
       labels:
