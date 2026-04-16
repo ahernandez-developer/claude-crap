@@ -75,8 +75,9 @@ const AWS_BENIGN_EXAMPLES = new Set([
  * PostToolUse via the MCP `ingest_sarif` tool.
  *
  * Rule IDs here carry no category prefix — the emitter adds exactly one
- * `SONAR-SEC-` prefix via {@link formatSecretRuleId}. Double-prefixing
- * (the v0.4.5 bug) broke SARIF dedup keys and downstream SIEM correlation.
+ * `SONAR-SEC-` prefix via {@link formatSecretRuleId}. Keeping the prefix
+ * out of the rule table avoids double-prefixed SARIF ruleIds, which break
+ * dedup keys and downstream SIEM correlation.
  */
 export const HARDCODED_SECRET_PATTERNS = [
   { id: "AWS", re: /AKIA[0-9A-Z]{16}/g },

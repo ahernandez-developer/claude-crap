@@ -1,19 +1,24 @@
 /**
  * Characterization tests for the PreToolUse gatekeeper rule primitives.
  *
- * Pins the desired behaviour for three v0.4.5 audit findings:
+ * The rule module exports pure helpers that decide whether a proposed
+ * tool call should be blocked. These tests pin three behaviours the
+ * helpers must guarantee:
  *
- *   BUG-01 — `BASH-RMROOT` regex must block every realistic `rm -rf /`
- *            variant, including critical-path system directories, and
- *            must not block safe project-relative removals.
- *   BUG-02 — Emitted SARIF rule IDs carry exactly one category prefix
- *            (`SONAR-SEC-...` or `SONAR-BASH-...`), never a doubled
- *            prefix such as `SONAR-SEC-SEC-AWS`.
- *   BUG-10 — The `AKIA...` AWS access-key regex allowlists canonical
- *            AWS-published example keys so the gatekeeper does not
- *            reject its own documentation and fixtures.
+ *   1. Destructive `rm` detection blocks every realistic variant that
+ *      targets the filesystem root, a critical system directory, or
+ *      the user's home, while leaving safe project-relative removals
+ *      (and quoted `rm -rf /` text inside `echo`) untouched.
+ *   2. Emitted SARIF rule IDs carry exactly one category prefix
+ *      (`SONAR-SEC-...` or `SONAR-BASH-...`). No rule entry in the
+ *      tables may embed the category in its own `id` field — the
+ *      emitter is the single source of the prefix.
+ *   3. The `AKIA...` AWS access-key regex allowlists canonical
+ *      AWS-published example keys so the gatekeeper does not reject
+ *      its own documentation and fixtures, while still catching
+ *      real-shape keys.
  *
- * The test imports the rule module directly so each assertion runs
+ * The tests import the rule module directly so each assertion runs
  * against the pure helper — no subprocess, no stdin parsing — which
  * keeps failure diagnostics tight.
  *
@@ -42,9 +47,9 @@ import {
   DESTRUCTIVE_BASH_PATTERNS,
 } from "../../plugin/hooks/lib/gatekeeper-rules.mjs";
 
-// ── BUG-01 ────────────────────────────────────────────────────────────
+// ── Destructive rm detection ──────────────────────────────────────────
 
-describe("BUG-01 — BASH-RMROOT blocks every realistic rm -rf / variant", () => {
+describe("destructive rm blocks filesystem root, system dirs, and $HOME", () => {
   const MUST_BLOCK: ReadonlyArray<string> = [
     // Filesystem root in every common shape.
     "rm -rf /",
@@ -90,9 +95,9 @@ describe("BUG-01 — BASH-RMROOT blocks every realistic rm -rf / variant", () =>
   }
 });
 
-// ── BUG-02 ────────────────────────────────────────────────────────────
+// ── SARIF rule-ID formatting ──────────────────────────────────────────
 
-describe("BUG-02 — rule IDs carry exactly one category prefix", () => {
+describe("SARIF rule IDs carry exactly one category prefix", () => {
   it("formatSecretRuleId prepends SONAR-SEC exactly once", () => {
     assert.equal(formatSecretRuleId({ id: "AWS" }), "SONAR-SEC-AWS");
     assert.equal(formatSecretRuleId({ id: "PRIVKEY" }), "SONAR-SEC-PRIVKEY");
@@ -122,9 +127,9 @@ describe("BUG-02 — rule IDs carry exactly one category prefix", () => {
   });
 });
 
-// ── BUG-10 ────────────────────────────────────────────────────────────
+// ── AWS example-key allowlist ─────────────────────────────────────────
 
-describe("BUG-10 — canonical AWS example keys are allowlisted", () => {
+describe("canonical AWS example keys are allowlisted, real-shape keys are not", () => {
   // Split so this very file doesn't match the regex it is testing.
   const CANONICAL_EXAMPLE = "AKIA" + "IOSFODNN7" + "EXAMPLE";
   const REAL_SHAPE = "AKIA" + "J7NVPZZZAB12CDEF"; // 20 chars, AKIA + 16 upper-alnum
