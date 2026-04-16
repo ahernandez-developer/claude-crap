@@ -9799,12 +9799,31 @@ function extractWorkspacePatterns(workspaces) {
   }
   return [];
 }
+function stripYamlComment(line) {
+  let inSingle = false;
+  let inDouble = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === "\\" && inDouble && i + 1 < line.length) {
+      i++;
+      continue;
+    }
+    if (!inDouble && ch === "'") {
+      inSingle = !inSingle;
+    } else if (!inSingle && ch === '"') {
+      inDouble = !inDouble;
+    } else if (!inSingle && !inDouble && ch === "#") {
+      return line.slice(0, i);
+    }
+  }
+  return line;
+}
 function parsePnpmWorkspaceYaml(yaml) {
   const patterns = [];
   const lines = yaml.split(/\r?\n/);
   let inPackages = false;
   for (const rawLine of lines) {
-    const line = rawLine.replace(/#.*$/, "").replace(/\s+$/, "");
+    const line = stripYamlComment(rawLine).replace(/\s+$/, "");
     if (line.length === 0) continue;
     if (/^packages\s*:\s*$/.test(line)) {
       inPackages = true;
@@ -9815,7 +9834,7 @@ function parsePnpmWorkspaceYaml(yaml) {
       continue;
     }
     if (!inPackages) continue;
-    const m = /^\s*-\s*("([^"]*)"|'([^']*)'|([^#\s]+))\s*$/.exec(line);
+    const m = /^\s*-\s*("([^"]*)"|'([^']*)'|(\S+))\s*$/.exec(line);
     if (m) {
       const value = m[2] ?? m[3] ?? m[4] ?? "";
       if (value.length > 0) patterns.push(value);
@@ -9875,8 +9894,7 @@ function collectSubdirectories(workspaceRoot, extraDirs) {
     for (const dir of extraDirs) {
       const absDir = resolve8(workspaceRoot, dir);
       if (!existsSync6(absDir)) continue;
-      const hasMarker = PROJECT_MARKERS.some((m) => existsSync6(join12(absDir, m)));
-      if (hasMarker) {
+      if (directoryIsProjectRoot(absDir)) {
         subdirs.add(absDir);
         continue;
       }
@@ -9917,6 +9935,18 @@ var PROJECT_MARKERS = [
   "build.gradle.kts",
   "Directory.Build.props"
 ];
+var DOTNET_PROJECT_EXTENSIONS = [".csproj", ".sln", ".slnx"];
+function directoryIsProjectRoot(absDir) {
+  if (PROJECT_MARKERS.some((m) => existsSync6(join12(absDir, m)))) return true;
+  try {
+    const entries = readdirSync3(absDir);
+    return entries.some(
+      (e) => DOTNET_PROJECT_EXTENSIONS.some((ext) => e.endsWith(ext))
+    );
+  } catch {
+    return false;
+  }
+}
 async function discoverProjectMap(workspaceRoot, options) {
   const subdirs = collectSubdirectories(workspaceRoot, options?.projectDirs);
   const binaryCache = /* @__PURE__ */ new Map();

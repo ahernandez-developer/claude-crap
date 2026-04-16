@@ -429,4 +429,56 @@ describe("discoverProjectMap — pnpm-workspace.yaml", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it("preserves literal '#' inside a quoted pnpm-workspace entry", async () => {
+    const dir = makeTmpDir();
+    try {
+      writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "root" }));
+      // Quoted entry with a '#' — naive comment stripping would truncate
+      // it to `"packages/` and the project would silently disappear.
+      writeFileSync(
+        join(dir, "pnpm-workspace.yaml"),
+        ["packages:", "  - \"tooling/#oddly-named\"", ""].join("\n"),
+      );
+
+      mkdirSync(join(dir, "tooling", "#oddly-named"), { recursive: true });
+      writeFileSync(
+        join(dir, "tooling", "#oddly-named", "package.json"),
+        JSON.stringify({ name: "oddly" }),
+      );
+
+      const map = await discoverProjectMap(dir);
+      const entry = findProject(map, "tooling/#oddly-named");
+      assert.equal(entry.type, "javascript");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+// ── projectDirs + .NET-only project marker ───────────────────────────
+
+describe("discoverProjectMap — configured projectDirs with .NET-only markers", () => {
+  it("treats a user-configured directory holding only a .slnx as a project", async () => {
+    const dir = makeTmpDir();
+    try {
+      // Configured projectDir pointing at a directory whose only marker
+      // is an .slnx solution file — the single-filename PROJECT_MARKERS
+      // list alone would miss this and the dir would be scanned one
+      // level deep as if it were a parent directory.
+      mkdirSync(join(dir, "services", "api"), { recursive: true });
+      writeFileSync(
+        join(dir, "services", "api", "Api.slnx"),
+        "<Solution></Solution>",
+      );
+
+      const map = await discoverProjectMap(dir, {
+        projectDirs: ["services/api"],
+      });
+      const api = findProject(map, "services/api");
+      assert.equal(api.type, "csharp");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
