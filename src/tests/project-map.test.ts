@@ -420,9 +420,11 @@ describe("discoverProjectMap — pnpm-workspace.yaml", () => {
         "this: is: not: actually: valid: yaml\n",
       );
 
-      // Must not throw.
+      // Must not throw, and must fall back to non-monorepo with zero
+      // sub-projects so downstream scans do not try to walk phantom paths.
       const map = await discoverProjectMap(dir);
-      assert.ok(Array.isArray(map.projects));
+      assert.equal(map.isMonorepo, false);
+      assert.equal(map.projects.length, 0);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

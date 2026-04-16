@@ -107,11 +107,16 @@ export function detectProjectType(workspaceRoot: string): ProjectType {
     return "java";
   }
 
-  // C# detection
+  // C# detection — .slnx is the XML solution format introduced with .NET 9.
   if (has("Directory.Build.props")) return "csharp";
   try {
     const entries = readdirSync(workspaceRoot);
-    if (entries.some((e) => e.endsWith(".csproj") || e.endsWith(".sln"))) {
+    if (
+      entries.some(
+        (e) =>
+          e.endsWith(".csproj") || e.endsWith(".sln") || e.endsWith(".slnx"),
+      )
+    ) {
       return "csharp";
     }
   } catch {

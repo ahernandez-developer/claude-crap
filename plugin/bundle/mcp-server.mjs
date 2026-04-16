@@ -9143,7 +9143,9 @@ function detectProjectType(workspaceRoot) {
   if (has("Directory.Build.props")) return "csharp";
   try {
     const entries = readdirSync2(workspaceRoot);
-    if (entries.some((e) => e.endsWith(".csproj") || e.endsWith(".sln"))) {
+    if (entries.some(
+      (e) => e.endsWith(".csproj") || e.endsWith(".sln") || e.endsWith(".slnx")
+    )) {
       return "csharp";
     }
   } catch {
