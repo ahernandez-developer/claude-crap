@@ -7454,6 +7454,25 @@ var DEFAULT_SKIP_DIRS = /* @__PURE__ */ new Set([
   "out",
   "target",
   "coverage",
+  "artifacts",
+  // CI artefact staging, Maven
+  "publish",
+  // `dotnet publish` output
+  // Desktop / mobile packaging outputs
+  "dist-electron",
+  // Electron-builder
+  "release",
+  // Electron-builder, Tauri
+  // .NET per-project build outputs (conventional at any depth)
+  "bin",
+  "obj",
+  // iOS / macOS dependency + build caches
+  "Pods",
+  // CocoaPods
+  "DerivedData",
+  // Xcode
+  "Carthage",
+  // Swift
   // Framework build outputs
   ".next",
   // Next.js
@@ -9758,7 +9777,9 @@ function detectProjectType2(dir) {
   if (has("Directory.Build.props")) return "csharp";
   try {
     const entries = readdirSync3(dir);
-    if (entries.some((e) => e.endsWith(".csproj") || e.endsWith(".sln"))) {
+    if (entries.some(
+      (e) => e.endsWith(".csproj") || e.endsWith(".sln") || e.endsWith(".slnx")
+    )) {
       return "csharp";
     }
   } catch {
@@ -9775,6 +9796,30 @@ function extractWorkspacePatterns(workspaces) {
     );
   }
   return [];
+}
+function parsePnpmWorkspaceYaml(yaml) {
+  const patterns = [];
+  const lines = yaml.split(/\r?\n/);
+  let inPackages = false;
+  for (const rawLine of lines) {
+    const line = rawLine.replace(/#.*$/, "").replace(/\s+$/, "");
+    if (line.length === 0) continue;
+    if (/^packages\s*:\s*$/.test(line)) {
+      inPackages = true;
+      continue;
+    }
+    if (inPackages && /^[^\s-]/.test(line)) {
+      inPackages = false;
+      continue;
+    }
+    if (!inPackages) continue;
+    const m = /^\s*-\s*("([^"]*)"|'([^']*)'|([^#\s]+))\s*$/.exec(line);
+    if (m) {
+      const value = m[2] ?? m[3] ?? m[4] ?? "";
+      if (value.length > 0) patterns.push(value);
+    }
+  }
+  return patterns;
 }
 function expandWorkspacePattern(workspaceRoot, pattern) {
   if (pattern.endsWith("/*")) {
@@ -9803,6 +9848,19 @@ function collectSubdirectories(workspaceRoot, extraDirs) {
       const raw = readFileSync5(pkgPath, "utf-8");
       const pkg = JSON.parse(raw);
       const patterns = extractWorkspacePatterns(pkg["workspaces"]);
+      for (const pattern of patterns) {
+        for (const absPath of expandWorkspacePattern(workspaceRoot, pattern)) {
+          subdirs.add(absPath);
+        }
+      }
+    } catch {
+    }
+  }
+  const pnpmPath = join12(workspaceRoot, "pnpm-workspace.yaml");
+  if (existsSync6(pnpmPath)) {
+    try {
+      const raw = readFileSync5(pnpmPath, "utf-8");
+      const patterns = parsePnpmWorkspaceYaml(raw);
       for (const pattern of patterns) {
         for (const absPath of expandWorkspacePattern(workspaceRoot, pattern)) {
           subdirs.add(absPath);
