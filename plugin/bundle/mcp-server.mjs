@@ -7458,6 +7458,23 @@ var DEFAULT_SKIP_DIRS = /* @__PURE__ */ new Set([
   // CI artefact staging, Maven
   "publish",
   // `dotnet publish` output
+  // Test coverage report bundles (generated HTML/JS from coverage tools;
+  // walking them floods the complexity scanner with synthetic minified
+  // functions like `coverage-report/main.js::gG` at CC 80+).
+  "coverage-report",
+  // ReportGenerator default (.NET)
+  "CoverageReport",
+  // ReportGenerator PascalCase variant
+  "coveragereport",
+  // ReportGenerator lowercase fallback
+  "TestResults",
+  // `dotnet test` default output
+  "cobertura",
+  // Cobertura XML reporter
+  "lcov-report",
+  // Istanbul HTML reporter
+  "htmlcov",
+  // coverage.py HTML output
   // Desktop / mobile packaging outputs
   "dist-electron",
   // Electron-builder

@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.7] - 2026-04-18
+
+### Fixed
+
+- **Coverage-report bundles leaking into the complexity scanner.** The
+  shared exclusion list skipped `coverage/` but not the generated
+  report bundles produced *next to* it (ReportGenerator writes to
+  `coverage-report/`, `dotnet test` emits `TestResults/`, Istanbul
+  emits `lcov-report/`, coverage.py emits `htmlcov/`). On a real-world
+  .NET workspace the dashboard flagged
+  `GanttLite.Server/coverage-report/main.js` as the single hottest
+  file with four CC-80+ errors, all coming from the minified
+  auto-generated `main.js` / `class.js` bundles — inflating Reliability
+  from A to D on a codebase whose real source was clean. Seven
+  canonical coverage-report directory names are now excluded at every
+  walker layer (`coverage-report`, `CoverageReport`, `coveragereport`,
+  `TestResults`, `cobertura`, `lcov-report`, `htmlcov`). Covered by
+  new characterization tests in `src/tests/exclusions.test.ts` and
+  `src/tests/workspace-walker.test.ts` that pin both the filter
+  predicate and the end-to-end walker behavior. The hooks twin
+  (`plugin/hooks/lib/quality-gate.mjs`) was updated in the same
+  commit so the Stop-gate LOC walker stays consistent with the shared
+  filter. (`src/shared/exclusions.ts`,
+  `plugin/hooks/lib/quality-gate.mjs`.)
+
 ## [0.4.5] - 2026-04-13
 
 ### Fixed
