@@ -150,6 +150,9 @@ const LOC_WALK_SKIP_DIRS = new Set([
   ".git",
   // Build outputs
   "dist", "build", "bundle", "out", "target", "coverage",
+  // Test coverage report bundles (ReportGenerator, Istanbul, coverage.py, dotnet test)
+  "coverage-report", "CoverageReport", "coveragereport",
+  "TestResults", "cobertura", "lcov-report", "htmlcov",
   // Framework build outputs
   ".next", ".nuxt", ".output", ".vercel", ".svelte-kit",
   ".astro", ".angular", ".turbo", ".parcel-cache", ".expo",

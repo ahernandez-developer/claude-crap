@@ -58,6 +58,12 @@ export interface FileDetailSummary {
 /** Full response payload for the file detail endpoint. */
 export interface FileDetailResponse {
   readonly filePath: string;
+  /**
+   * Absolute path on the host filesystem, already resolved through the
+   * workspace-traversal guard. The UI uses this to build editor
+   * deep-links (e.g. `vscode://file/{absolutePath}:{line}`).
+   */
+  readonly absolutePath: string;
   readonly language: SupportedLanguage | null;
   readonly physicalLoc: number;
   readonly logicalLoc: number;
@@ -175,6 +181,7 @@ export async function buildFileDetail(
 
   return {
     filePath: relativePath,
+    absolutePath,
     language,
     physicalLoc,
     logicalLoc,

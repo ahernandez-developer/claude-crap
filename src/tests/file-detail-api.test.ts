@@ -190,6 +190,44 @@ describe("buildFileDetail", () => {
     }
   });
 
+  it("returns the resolved absolute path so the UI can build editor deep-links", async () => {
+    // The file-detail view exposes "Open in editor" buttons that emit
+    // `vscode://file/{absolutePath}:{line}` (and JetBrains equivalents).
+    // Constructing that URL client-side requires the absolute path —
+    // the workspace-relative `filePath` alone is not enough. This
+    // characterization test pins that contract so the UI can rely on it.
+    const dir = makeTmpDir();
+    try {
+      writeFileSync(join(dir, "hello.ts"), SAMPLE_TS);
+      const store = new SarifStore({
+        workspaceRoot: dir,
+        outputDir: join(dir, ".claude-crap/reports"),
+      });
+      const result = await buildFileDetail({
+        relativePath: "hello.ts",
+        workspaceRoot: dir,
+        astEngine: engine,
+        sarifStore: store,
+        cyclomaticMax: 15,
+      });
+      assert.equal(
+        result.absolutePath,
+        join(dir, "hello.ts"),
+        `expected absolutePath to join workspaceRoot with filePath, got ${result.absolutePath}`,
+      );
+      assert.ok(
+        result.absolutePath.endsWith("hello.ts"),
+        "absolutePath should end with the relative path",
+      );
+      assert.ok(
+        result.absolutePath.startsWith(dir),
+        "absolutePath must live under the workspace root (path-traversal defense)",
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("returns empty functions for unsupported languages", async () => {
     const dir = makeTmpDir();
     try {

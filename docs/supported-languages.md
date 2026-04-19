@@ -348,6 +348,8 @@ list. The following are excluded by default:
 - Dependencies / VCS: `node_modules`, `vendor`, `.git`
 - Generic build outputs: `dist`, `build`, `bundle`, `out`, `target`,
   `coverage`, `artifacts`, `publish`
+- Test coverage reporter bundles: `coverage-report`, `CoverageReport`,
+  `coveragereport`, `TestResults`, `cobertura`, `lcov-report`, `htmlcov`
 - Electron / Tauri packaging: `dist-electron`, `release`
 - .NET per-project build: `bin`, `obj`
 - iOS / macOS dependency + build caches: `Pods`, `DerivedData`, `Carthage`

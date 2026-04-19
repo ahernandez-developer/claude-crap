@@ -50,6 +50,25 @@ describe("DEFAULT_SKIP_DIRS", () => {
       assert.ok(DEFAULT_SKIP_DIRS.has(dir), `missing skip dir: ${dir}`);
     }
   });
+
+  it("includes coverage report directories emitted by test tooling", () => {
+    // ReportGenerator (.NET), Istanbul (JS) and dotCover emit generated
+    // HTML/JS bundles into these folders. Previously only the bare
+    // `coverage` name was skipped, which leaked files like
+    // `GanttLite.Server/coverage-report/main.js` into complexity scans
+    // and flooded the dashboard with false-positive high-CC findings.
+    for (const dir of [
+      "coverage-report",  // ReportGenerator default
+      "CoverageReport",   // ReportGenerator PascalCase
+      "coveragereport",   // ReportGenerator lowercase fallback
+      "TestResults",      // dotnet test default
+      "cobertura",        // Cobertura XML output
+      "lcov-report",      // Istanbul HTML reporter
+      "htmlcov",          // coverage.py HTML output
+    ]) {
+      assert.ok(DEFAULT_SKIP_DIRS.has(dir), `missing coverage skip dir: ${dir}`);
+    }
+  });
 });
 
 describe("DEFAULT_SKIP_PATTERNS", () => {
@@ -92,6 +111,21 @@ describe("createExclusionFilter", () => {
       assert.equal(filter.shouldSkipDir("legacy"), true);
       assert.equal(filter.shouldSkipDir("generated"), true);
       assert.equal(filter.shouldSkipDir("src"), false);
+    });
+
+    it("skips coverage report directories from every major test runner", () => {
+      // Regression: the ReportGenerator bundle
+      // (`coverage-report/main.js`, `class.js`, etc.) used to surface
+      // in the dashboard's complexity hotspots as minified code with
+      // CC ≥ 80. These directories must never be walked.
+      const filter = createExclusionFilter();
+      assert.equal(filter.shouldSkipDir("coverage-report"), true);
+      assert.equal(filter.shouldSkipDir("CoverageReport"), true);
+      assert.equal(filter.shouldSkipDir("coveragereport"), true);
+      assert.equal(filter.shouldSkipDir("TestResults"), true);
+      assert.equal(filter.shouldSkipDir("cobertura"), true);
+      assert.equal(filter.shouldSkipDir("lcov-report"), true);
+      assert.equal(filter.shouldSkipDir("htmlcov"), true);
     });
   });
 
