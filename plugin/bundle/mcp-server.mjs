@@ -7852,6 +7852,7 @@ async function buildFileDetail(input) {
   ) / 100 : 0;
   return {
     filePath: relativePath,
+    absolutePath,
     language,
     physicalLoc,
     logicalLoc,
