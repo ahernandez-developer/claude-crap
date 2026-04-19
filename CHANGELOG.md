@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.8] - 2026-04-19
+
+### Fixed
+
+- **Dashboard port thrash when multiple MCP launchers boot concurrently.**
+  Claude Code can spawn several MCP server instances against the same
+  workspace (duplicate plugin registrations, stale sessions, etc.).
+  The previous `killStaleDashboard` implementation sent SIGTERM to the
+  prior pidfile owner on every boot so it could reclaim port 5117 —
+  with N concurrent launchers this became a loop where each instance
+  killed the last, the pidfile churned, and most instances ended up
+  with `dashboard = null`. `score_project` then returned
+  `dashboardUrl: null` to the user even though a dashboard was usually
+  reachable on 5117. `startDashboard` now **adopts** a healthy pidfile
+  owner (`/api/health` probe with a 500 ms timeout) instead of killing
+  it, and only terminates zombies (PID alive, port unresponsive).
+  Losing an `EADDRINUSE` race also falls back to adoption rather than
+  throwing, so two launchers starting in the same millisecond still
+  converge cleanly. `DashboardHandle` gained a read-only
+  `adopted: boolean` flag; adopted handles have a no-op `close()` so
+  one MCP shutdown cannot strand its siblings. Covered by a new
+  29-assertion suite in `src/tests/dashboard-adoption.test.ts` (6
+  characterization + 23 edge cases: adoption happy path, zombie
+  detection, concurrent boot race, pidfile hygiene, owner/adopter
+  close semantics). (`src/dashboard/server.ts`.)
+
 ## [0.4.7] - 2026-04-18
 
 ### Fixed
