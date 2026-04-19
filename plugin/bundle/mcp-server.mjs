@@ -7875,6 +7875,20 @@ async function buildFileDetail(input) {
 // src/dashboard/server.ts
 async function startDashboard(options) {
   const { config, sarifStore, workspaceStatsProvider, logger: logger2 } = options;
+  const pidFilePath = resolvePidFilePath(config);
+  const adoption = await tryAdoptExisting(pidFilePath, config.dashboardPort, logger2);
+  if (adoption) {
+    logger2.info(
+      { url: adoption.url, ownerPid: adoption.pid, port: config.dashboardPort },
+      "adopted existing claude-crap dashboard"
+    );
+    return {
+      url: adoption.url,
+      adopted: true,
+      async close() {
+      }
+    };
+  }
   const publicRoot = await resolvePublicRoot(logger2);
   const fastify = Fastify({
     logger: false,
@@ -7927,14 +7941,35 @@ async function startDashboard(options) {
   fastify.get("/", async (_request, reply) => {
     return reply.sendFile("index.html");
   });
-  const pidFilePath = resolvePidFilePath(config);
-  await killStaleDashboard(pidFilePath, config.dashboardPort, logger2);
-  await fastify.listen({ port: config.dashboardPort, host: "127.0.0.1" });
+  try {
+    await fastify.listen({ port: config.dashboardPort, host: "127.0.0.1" });
+  } catch (err) {
+    const code = err.code;
+    if (code === "EADDRINUSE") {
+      await fastify.close().catch(() => {
+      });
+      const raceAdoption = await tryAdoptExisting(pidFilePath, config.dashboardPort, logger2);
+      if (raceAdoption) {
+        logger2.info(
+          { url: raceAdoption.url, ownerPid: raceAdoption.pid, port: config.dashboardPort },
+          "dashboard bind lost race, adopted concurrent owner"
+        );
+        return {
+          url: raceAdoption.url,
+          adopted: true,
+          async close() {
+          }
+        };
+      }
+    }
+    throw err;
+  }
   const url = `http://127.0.0.1:${config.dashboardPort}`;
   logger2.info({ url, publicRoot }, "claude-crap dashboard listening");
   writePidFile(pidFilePath, config.dashboardPort);
   return {
     url,
+    adopted: false,
     async close() {
       removePidFile(pidFilePath);
       await fastify.close();
@@ -8004,29 +8039,40 @@ function isPidAlive(pid) {
     return false;
   }
 }
-async function killStaleDashboard(pidFilePath, port, logger2) {
-  if (!existsSync(pidFilePath)) return;
+async function tryAdoptExisting(pidFilePath, port, logger2) {
+  if (!existsSync(pidFilePath)) return null;
   let stale;
   try {
     stale = JSON.parse(readFileSync(pidFilePath, "utf8"));
   } catch {
+    logger2.info({ pidFilePath }, "corrupt dashboard pidfile, removing");
     removePidFile(pidFilePath);
-    return;
+    return null;
   }
   if (!isPidAlive(stale.pid)) {
-    logger2.info({ stalePid: stale.pid }, "stale dashboard PID file found (process dead), removing");
+    logger2.info({ stalePid: stale.pid }, "stale dashboard pidfile (process dead), removing");
     removePidFile(pidFilePath);
-    return;
+    return null;
   }
-  logger2.info(
-    { stalePid: stale.pid, port: stale.port, startedAt: stale.startedAt },
-    "killing stale dashboard process from previous session"
+  if (stale.port !== port) {
+    logger2.info(
+      { stalePort: stale.port, wantedPort: port },
+      "dashboard pidfile points at different port, ignoring"
+    );
+    removePidFile(pidFilePath);
+    return null;
+  }
+  const healthy = await probeDashboardHealth(port);
+  if (healthy) {
+    return { url: `http://127.0.0.1:${port}`, pid: stale.pid };
+  }
+  logger2.warn(
+    { stalePid: stale.pid, port },
+    "dashboard pidfile owner is unresponsive, terminating"
   );
   try {
     process.kill(stale.pid, "SIGTERM");
   } catch {
-    removePidFile(pidFilePath);
-    return;
   }
   for (let i = 0; i < 30; i++) {
     if (!isPidAlive(stale.pid)) break;
@@ -8041,6 +8087,17 @@ async function killStaleDashboard(pidFilePath, port, logger2) {
   }
   removePidFile(pidFilePath);
   await new Promise((r) => setTimeout(r, 300));
+  return null;
+}
+async function probeDashboardHealth(port) {
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/api/health`, {
+      signal: AbortSignal.timeout(500)
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
 }
 async function buildComplexityReport(config, engine, logger2, exclude) {
   const threshold = config.cyclomaticMax;

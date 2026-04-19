@@ -72,9 +72,15 @@ export interface StartDashboardOptions {
 /**
  * Handle returned by {@link startDashboard}. Use `url` to build the
  * link the user clicks; call `close()` during shutdown.
+ *
+ * `adopted === true` means another claude-crap process already owned
+ * the dashboard port when we booted, and we are piggy-backing on its
+ * HTTP server. Adopted handles have a no-op `close()` because tearing
+ * down the Fastify instance would strand the other MCP servers.
  */
 export interface DashboardHandle {
   readonly url: string;
+  readonly adopted: boolean;
   close(): Promise<void>;
 }
 
@@ -87,6 +93,28 @@ export interface DashboardHandle {
  */
 export async function startDashboard(options: StartDashboardOptions): Promise<DashboardHandle> {
   const { config, sarifStore, workspaceStatsProvider, logger } = options;
+  const pidFilePath = resolvePidFilePath(config);
+
+  // Adopt-don't-steal: if a prior MCP server is already serving the
+  // dashboard on this port AND is healthy, piggy-back on it instead of
+  // killing it. This is what keeps N concurrent launchers from
+  // thrashing the port in an endless SIGTERM loop.
+  const adoption = await tryAdoptExisting(pidFilePath, config.dashboardPort, logger);
+  if (adoption) {
+    logger.info(
+      { url: adoption.url, ownerPid: adoption.pid, port: config.dashboardPort },
+      "adopted existing claude-crap dashboard",
+    );
+    return {
+      url: adoption.url,
+      adopted: true,
+      async close() {
+        // No-op: we never bound a socket of our own, so there is
+        // nothing to release. Removing the pidfile here would make the
+        // owner's `close()` race with our cleanup.
+      },
+    };
+  }
 
   // Resolve the public/ directory. After `npm run build` the compiled
   // server lives in `dist/dashboard/server.js`, but we keep the static
@@ -173,22 +201,41 @@ export async function startDashboard(options: StartDashboardOptions): Promise<Da
     return reply.sendFile("index.html");
   });
 
-  // Kill any stale dashboard from a previous session so we always
-  // bind to the configured port. This mirrors claude-mem's PID file
-  // pattern: write a PID file when alive, check + kill on next boot.
-  const pidFilePath = resolvePidFilePath(config);
-  await killStaleDashboard(pidFilePath, config.dashboardPort, logger);
-
-  await fastify.listen({ port: config.dashboardPort, host: "127.0.0.1" });
+  // The pidfile was either missing, stale, or pointed at a zombie —
+  // `tryAdoptExisting` has already cleaned it up. Try to bind. If we
+  // lose a race against another launcher that bound between our probe
+  // and our listen, fall back to adoption instead of failing.
+  try {
+    await fastify.listen({ port: config.dashboardPort, host: "127.0.0.1" });
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === "EADDRINUSE") {
+      await fastify.close().catch(() => { /* best effort */ });
+      const raceAdoption = await tryAdoptExisting(pidFilePath, config.dashboardPort, logger);
+      if (raceAdoption) {
+        logger.info(
+          { url: raceAdoption.url, ownerPid: raceAdoption.pid, port: config.dashboardPort },
+          "dashboard bind lost race, adopted concurrent owner",
+        );
+        return {
+          url: raceAdoption.url,
+          adopted: true,
+          async close() { /* no-op — see adopted branch above */ },
+        };
+      }
+    }
+    throw err;
+  }
 
   const url = `http://127.0.0.1:${config.dashboardPort}`;
   logger.info({ url, publicRoot }, "claude-crap dashboard listening");
 
-  // Write PID file so the next session can find and kill us.
+  // Write PID file so sibling MCP servers can find us and adopt.
   writePidFile(pidFilePath, config.dashboardPort);
 
   return {
     url,
+    adopted: false,
     async close() {
       removePidFile(pidFilePath);
       await fastify.close();
@@ -310,71 +357,101 @@ function isPidAlive(pid: number): boolean {
 }
 
 /**
- * Read the PID file, kill any stale dashboard process, and free the
- * port so the current session can bind to it. This is the key
- * difference from the port-fallback approach: instead of drifting to
- * 5118, 5119, etc., we reclaim the configured port every time.
+ * Probe an existing dashboard and decide whether the current process
+ * can adopt it instead of binding its own Fastify server.
  *
- * @param pidFilePath  Absolute path to `dashboard.pid`.
- * @param port         The configured dashboard port.
- * @param logger       Pino logger for diagnostics.
+ * Returns `{ url, pid }` only when all four conditions hold:
+ *   1. A pidfile exists and parses as JSON.
+ *   2. The recorded PID is still alive (signal-0 probe).
+ *   3. The pidfile's recorded port matches the configured port.
+ *   4. A GET on `/api/health` responds within ~500ms.
+ *
+ * Returns `null` in every other case, but with a side-effect that makes
+ * the call-site's next step obvious:
+ *   - Missing / corrupt / dead-PID / port-mismatch  → pidfile is removed
+ *     so the caller can bind cleanly.
+ *   - Zombie (PID alive, port unresponsive)         → stale owner is
+ *     SIGKILL'd and the pidfile is removed. This is the one case where
+ *     we still have to kill something, because the socket belongs to a
+ *     process that is not talking HTTP anymore.
  */
-async function killStaleDashboard(
+async function tryAdoptExisting(
   pidFilePath: string,
   port: number,
   logger: Logger,
-): Promise<void> {
-  if (!existsSync(pidFilePath)) return;
+): Promise<{ url: string; pid: number } | null> {
+  if (!existsSync(pidFilePath)) return null;
 
   let stale: DashboardPidFile;
   try {
     stale = JSON.parse(readFileSync(pidFilePath, "utf8"));
   } catch {
-    // Corrupted PID file — remove it and move on.
+    logger.info({ pidFilePath }, "corrupt dashboard pidfile, removing");
     removePidFile(pidFilePath);
-    return;
+    return null;
   }
 
   if (!isPidAlive(stale.pid)) {
-    logger.info({ stalePid: stale.pid }, "stale dashboard PID file found (process dead), removing");
+    logger.info({ stalePid: stale.pid }, "stale dashboard pidfile (process dead), removing");
     removePidFile(pidFilePath);
-    return;
+    return null;
   }
 
-  // Process is alive — kill it so we can reclaim the port.
-  logger.info(
-    { stalePid: stale.pid, port: stale.port, startedAt: stale.startedAt },
-    "killing stale dashboard process from previous session",
-  );
+  if (stale.port !== port) {
+    // The recorded owner is on a different port than we want. Don't
+    // adopt it, don't kill it — just treat the pidfile as unrelated.
+    logger.info(
+      { stalePort: stale.port, wantedPort: port },
+      "dashboard pidfile points at different port, ignoring",
+    );
+    removePidFile(pidFilePath);
+    return null;
+  }
 
+  const healthy = await probeDashboardHealth(port);
+  if (healthy) {
+    return { url: `http://127.0.0.1:${port}`, pid: stale.pid };
+  }
+
+  // Zombie: PID is alive but not serving HTTP. Most likely the owner
+  // crashed mid-init or is stuck. Terminate it so we can take over.
+  logger.warn(
+    { stalePid: stale.pid, port },
+    "dashboard pidfile owner is unresponsive, terminating",
+  );
   try {
     process.kill(stale.pid, "SIGTERM");
   } catch {
-    // Permission denied or already gone — remove PID file either way.
-    removePidFile(pidFilePath);
-    return;
+    /* already gone */
   }
-
-  // Wait up to 3 seconds for the process to exit.
   for (let i = 0; i < 30; i++) {
     if (!isPidAlive(stale.pid)) break;
     await new Promise((r) => setTimeout(r, 100));
   }
-
-  // If still alive after 3s, escalate to SIGKILL.
   if (isPidAlive(stale.pid)) {
-    try {
-      process.kill(stale.pid, "SIGKILL");
-    } catch {
-      /* best effort */
-    }
+    try { process.kill(stale.pid, "SIGKILL"); } catch { /* best effort */ }
     await new Promise((r) => setTimeout(r, 200));
   }
-
   removePidFile(pidFilePath);
-
-  // Give the OS a moment to release the TCP port after the process dies.
+  // Let the OS release the TCP port before the caller tries to bind.
   await new Promise((r) => setTimeout(r, 300));
+  return null;
+}
+
+/**
+ * Low-latency health probe. Resolves `true` when the dashboard replies
+ * 2xx to `/api/health` within 500ms, `false` on any other outcome
+ * (timeout, connection refused, 5xx, etc.).
+ */
+async function probeDashboardHealth(port: number): Promise<boolean> {
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/api/health`, {
+      signal: AbortSignal.timeout(500),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
 }
 
 // ── Complexity report builder ──────────────────────────────────────
